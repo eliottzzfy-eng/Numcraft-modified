@@ -297,6 +297,83 @@ fn get_block_in_chunk_or_world(
     }
 }
 
+/// Cheap, deterministic position hash (no floats, no_std friendly) used to fake a
+/// per-block texture pattern without adding any triangle or touching the rasterizer.
+/// Odd multipliers are used so the pattern doesn't visibly line up with the block grid.
+fn hash3(x: isize, y: isize, z: isize) -> u32 {
+    let mut h = (x as i32)
+        .wrapping_mul(374_761_393)
+        ^ (y as i32).wrapping_mul(668_265_263)
+        ^ (z as i32).wrapping_mul(-2_147_483_647i32);
+    h ^= h >> 13;
+    h = h.wrapping_mul(1_274_126_177);
+    (h ^ (h >> 16)) as u32
+}
+
+/// Small brightness reduction (kept well under the base light levels in
+/// `Mesh::get_light_level_from_dir`, so it can never underflow) used to simulate a
+/// texture-like pattern per block type using only flat per-face shading. Colored
+/// blocks (and anything not listed) intentionally fall back to the original
+/// alternating checkerboard so they stay exactly as before.
+fn get_block_pattern_shade(block_type: BlockType, x: isize, y: isize, z: isize) -> u16 {
+    match block_type {
+        // Sparse darker specks
+        BlockType::Stone => {
+            if hash3(x, y, z) % 7 == 0 {
+                2
+            } else {
+                0
+            }
+        }
+        // Coarser, patchier noise (rounded stone chunks)
+        BlockType::Cobblestone => match hash3(x, y, z) % 5 {
+            0 => 3,
+            1 => 1,
+            _ => 0,
+        },
+        // Grass reuses the dirt texture on its sides, so it shares dirt's pattern
+        BlockType::Dirt | BlockType::Grass => match hash3(x, y, z) % 6 {
+            0 => 2,
+            1 | 2 => 1,
+            _ => 0,
+        },
+        // Fine, subtle grain
+        BlockType::Sand => {
+            if (x + y + z).rem_euclid(2) == 0 {
+                1
+            } else {
+                0
+            }
+        }
+        // Repeating diagonal bands to suggest bark/wood grain
+        BlockType::Log => match (x.rem_euclid(3) + z.rem_euclid(3)).rem_euclid(3) {
+            0 => 2,
+            1 => 0,
+            _ => 1,
+        },
+        // Sparse irregular gaps (mottled foliage look)
+        BlockType::Leaves => match hash3(x, y, z) % 3 {
+            0 => 3,
+            1 => 1,
+            _ => 0,
+        },
+        // Horizontal board lines
+        BlockType::Planks => match y.rem_euclid(4) {
+            0 => 1,
+            2 => 2,
+            _ => 0,
+        },
+        // Colored blocks, Border, Air: unchanged, original checkerboard behavior
+        _ => {
+            if (x + y + z) % 2 == 0 {
+                2
+            } else {
+                0
+            }
+        }
+    }
+}
+
 pub struct Mesh {
     pub quads: Vec<Quad>,
 }
@@ -338,7 +415,7 @@ impl Mesh {
                     if block_type != BlockType::Air {
                         let bloc_pos = Vector3::new(x as u16, y as u16, z as u16);
 
-                        let grid_additional_light = if (x + y + z) % 2 == 0 { 2 } else { 0 }; // Make one block/2 darker to increase visibility
+                        let grid_additional_light = get_block_pattern_shade(block_type, x, y, z); // Fake per-block "texture" pattern using only flat shading
 
                         if get_block_in_chunk_or_world(Vector3::new(x, y, z - 1), chunks_manager, chunk)
                             .is_some_and(|block| block.is_air())
