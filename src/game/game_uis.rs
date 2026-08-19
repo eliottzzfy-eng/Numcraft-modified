@@ -153,6 +153,55 @@ impl Game {
             ItemStack::new(crate::constants::ItemType::PlanksBlock, 1, true),
         );
 
+        creative_inventory.replace_slot_item_stack(
+            9,
+            ItemStack::new(crate::constants::ItemType::RedBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            10,
+            ItemStack::new(crate::constants::ItemType::OrangeBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            11,
+            ItemStack::new(crate::constants::ItemType::YellowBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            12,
+            ItemStack::new(crate::constants::ItemType::LimeBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            13,
+            ItemStack::new(crate::constants::ItemType::CyanBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            14,
+            ItemStack::new(crate::constants::ItemType::BlueBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            15,
+            ItemStack::new(crate::constants::ItemType::PurpleBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            16,
+            ItemStack::new(crate::constants::ItemType::MagentaBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            17,
+            ItemStack::new(crate::constants::ItemType::PinkBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            18,
+            ItemStack::new(crate::constants::ItemType::WhiteBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            19,
+            ItemStack::new(crate::constants::ItemType::GrayBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            20,
+            ItemStack::new(crate::constants::ItemType::BlackBlock, 1, true),
+        );
+
         let mut inventories = [&mut self.player.inventory, &mut creative_inventory];
 
         let mut ui = GameUI::new(true)
