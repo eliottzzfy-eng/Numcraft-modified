@@ -14,7 +14,10 @@ pub mod rendering {
 
     pub const FOV: f32 = 45.;
 
+    #[cfg(feature = "epsilon")]
     pub const MAX_TRIANGLES: usize = 1500;
+    #[cfg(feature = "upsilon")]
+    pub const MAX_TRIANGLES: usize = 1200; // Sorry Upsilon users
 
     pub const MAX_RENDER_DISTANCE: usize = 2; // You shouldn't go higher
 
@@ -95,7 +98,7 @@ pub enum EntityType {
     Item = 1,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum BlockType {
     Air = 0,
     Stone = 1,
@@ -107,6 +110,19 @@ pub enum BlockType {
     Log = 7,
     Leaves = 8,
     Planks = 9,
+    // Decorative colored blocks (creative mode only for now)
+    Red = 10,
+    Orange = 11,
+    Yellow = 12,
+    Lime = 13,
+    Cyan = 14,
+    Blue = 15,
+    Purple = 16,
+    Magenta = 17,
+    Pink = 18,
+    White = 19,
+    Gray = 20,
+    Black = 21,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -123,6 +139,19 @@ pub enum ItemType {
     LogBlock = 7,
     LeavesBlock = 8,
     PlanksBlock = 9,
+    // Decorative colored blocks (creative mode only for now)
+    RedBlock = 10,
+    OrangeBlock = 11,
+    YellowBlock = 12,
+    LimeBlock = 13,
+    CyanBlock = 14,
+    BlueBlock = 15,
+    PurpleBlock = 16,
+    MagentaBlock = 17,
+    PinkBlock = 18,
+    WhiteBlock = 19,
+    GrayBlock = 20,
+    BlackBlock = 21,
 }
 
 impl ItemType {
@@ -139,6 +168,19 @@ impl ItemType {
             ItemType::LogBlock => 8,
             ItemType::LeavesBlock => 9,
             ItemType::PlanksBlock => 10,
+
+            ItemType::RedBlock => 11,
+            ItemType::OrangeBlock => 12,
+            ItemType::YellowBlock => 13,
+            ItemType::LimeBlock => 14,
+            ItemType::CyanBlock => 15,
+            ItemType::BlueBlock => 16,
+            ItemType::PurpleBlock => 17,
+            ItemType::MagentaBlock => 18,
+            ItemType::PinkBlock => 19,
+            ItemType::WhiteBlock => 20,
+            ItemType::GrayBlock => 21,
+            ItemType::BlackBlock => 22,
         }
     }
 
@@ -155,6 +197,19 @@ impl ItemType {
             7 => Some(ItemType::LogBlock),
             8 => Some(ItemType::LeavesBlock),
             9 => Some(ItemType::PlanksBlock),
+
+            10 => Some(ItemType::RedBlock),
+            11 => Some(ItemType::OrangeBlock),
+            12 => Some(ItemType::YellowBlock),
+            13 => Some(ItemType::LimeBlock),
+            14 => Some(ItemType::CyanBlock),
+            15 => Some(ItemType::BlueBlock),
+            16 => Some(ItemType::PurpleBlock),
+            17 => Some(ItemType::MagentaBlock),
+            18 => Some(ItemType::PinkBlock),
+            19 => Some(ItemType::WhiteBlock),
+            20 => Some(ItemType::GrayBlock),
+            21 => Some(ItemType::BlackBlock),
             _ => None,
         }
     }
@@ -171,6 +226,19 @@ impl ItemType {
             ItemType::LogBlock => 64,
             ItemType::LeavesBlock => 64,
             ItemType::PlanksBlock => 64,
+
+            ItemType::RedBlock => 64,
+            ItemType::OrangeBlock => 64,
+            ItemType::YellowBlock => 64,
+            ItemType::LimeBlock => 64,
+            ItemType::CyanBlock => 64,
+            ItemType::BlueBlock => 64,
+            ItemType::PurpleBlock => 64,
+            ItemType::MagentaBlock => 64,
+            ItemType::PinkBlock => 64,
+            ItemType::WhiteBlock => 64,
+            ItemType::GrayBlock => 64,
+            ItemType::BlackBlock => 64,
         }
     }
 
@@ -186,6 +254,19 @@ impl ItemType {
             ItemType::LogBlock => Some(BlockType::Log),
             ItemType::LeavesBlock => Some(BlockType::Leaves),
             ItemType::PlanksBlock => Some(BlockType::Planks),
+
+            ItemType::RedBlock => Some(BlockType::Red),
+            ItemType::OrangeBlock => Some(BlockType::Orange),
+            ItemType::YellowBlock => Some(BlockType::Yellow),
+            ItemType::LimeBlock => Some(BlockType::Lime),
+            ItemType::CyanBlock => Some(BlockType::Cyan),
+            ItemType::BlueBlock => Some(BlockType::Blue),
+            ItemType::PurpleBlock => Some(BlockType::Purple),
+            ItemType::MagentaBlock => Some(BlockType::Magenta),
+            ItemType::PinkBlock => Some(BlockType::Pink),
+            ItemType::WhiteBlock => Some(BlockType::White),
+            ItemType::GrayBlock => Some(BlockType::Gray),
+            ItemType::BlackBlock => Some(BlockType::Black),
         }
     }
 }
@@ -213,6 +294,19 @@ impl BlockType {
             BlockType::Log => 8,
             BlockType::Leaves => 9,
             BlockType::Planks => 10,
+
+            BlockType::Red => 11,
+            BlockType::Orange => 12,
+            BlockType::Yellow => 13,
+            BlockType::Lime => 14,
+            BlockType::Cyan => 15,
+            BlockType::Blue => 16,
+            BlockType::Purple => 17,
+            BlockType::Magenta => 18,
+            BlockType::Pink => 19,
+            BlockType::White => 20,
+            BlockType::Gray => 21,
+            BlockType::Black => 22,
         }
     }
 
@@ -228,6 +322,19 @@ impl BlockType {
             7 => Some(BlockType::Log),
             8 => Some(BlockType::Leaves),
             9 => Some(BlockType::Planks),
+
+            10 => Some(BlockType::Red),
+            11 => Some(BlockType::Orange),
+            12 => Some(BlockType::Yellow),
+            13 => Some(BlockType::Lime),
+            14 => Some(BlockType::Cyan),
+            15 => Some(BlockType::Blue),
+            16 => Some(BlockType::Purple),
+            17 => Some(BlockType::Magenta),
+            18 => Some(BlockType::Pink),
+            19 => Some(BlockType::White),
+            20 => Some(BlockType::Gray),
+            21 => Some(BlockType::Black),
             _ => None,
         }
     }
@@ -244,6 +351,20 @@ impl BlockType {
             BlockType::Log => 1.5,
             BlockType::Leaves => 0.3,
             BlockType::Planks => 1.2,
+
+            // Decorative colored blocks: same softness as planks
+            BlockType::Red => 0.8,
+            BlockType::Orange => 0.8,
+            BlockType::Yellow => 0.8,
+            BlockType::Lime => 0.8,
+            BlockType::Cyan => 0.8,
+            BlockType::Blue => 0.8,
+            BlockType::Purple => 0.8,
+            BlockType::Magenta => 0.8,
+            BlockType::Pink => 0.8,
+            BlockType::White => 0.8,
+            BlockType::Gray => 0.8,
+            BlockType::Black => 0.8,
         }
     }
 
@@ -259,6 +380,19 @@ impl BlockType {
             BlockType::Log => ItemType::LogBlock,
             BlockType::Leaves => ItemType::LeavesBlock,
             BlockType::Planks => ItemType::PlanksBlock,
+
+            BlockType::Red => ItemType::RedBlock,
+            BlockType::Orange => ItemType::OrangeBlock,
+            BlockType::Yellow => ItemType::YellowBlock,
+            BlockType::Lime => ItemType::LimeBlock,
+            BlockType::Cyan => ItemType::CyanBlock,
+            BlockType::Blue => ItemType::BlueBlock,
+            BlockType::Purple => ItemType::PurpleBlock,
+            BlockType::Magenta => ItemType::MagentaBlock,
+            BlockType::Pink => ItemType::PinkBlock,
+            BlockType::White => ItemType::WhiteBlock,
+            BlockType::Gray => ItemType::GrayBlock,
+            BlockType::Black => ItemType::BlackBlock,
         }
     }
 }
@@ -274,6 +408,19 @@ pub fn get_quad_color_from_texture_id(id: u8) -> Color565 {
         8 => Color565::from_rgb888(79, 53, 30),
         9 => Color565::from_rgb888(36, 75, 37),
         10 => Color565::from_rgb888(152, 124, 61),
+
+        11 => Color565::from_rgb888(200, 40, 40),   // Red
+        12 => Color565::from_rgb888(230, 130, 30),  // Orange
+        13 => Color565::from_rgb888(230, 210, 40),  // Yellow
+        14 => Color565::from_rgb888(90, 200, 60),   // Lime
+        15 => Color565::from_rgb888(40, 190, 190),  // Cyan
+        16 => Color565::from_rgb888(40, 90, 220),   // Blue
+        17 => Color565::from_rgb888(140, 60, 200),  // Purple
+        18 => Color565::from_rgb888(210, 60, 180),  // Magenta
+        19 => Color565::from_rgb888(240, 160, 190), // Pink
+        20 => Color565::from_rgb888(235, 235, 235), // White
+        21 => Color565::from_rgb888(100, 100, 100), // Gray
+        22 => Color565::from_rgb888(25, 25, 25),    // Black
 
         _ => Color565::from_rgb888(0, 0, 0),
         // 255 is reserved for block outline
