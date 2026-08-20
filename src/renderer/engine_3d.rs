@@ -19,22 +19,6 @@ fn is_textured_id(texture_id: u8) -> bool {
     (1..=10).contains(&texture_id)
 }
 
-/// Sample a single pixel (u, v both 0..=7) from the 8x8 tile belonging to `texture_id`
-/// inside the tileset image. Mirrors the exact same indexing already used by the 2D
-/// UI icon drawing code in renderer/hud.rs.
-fn sample_tileset(texture_id: u8, u: usize, v: usize) -> Color565 {
-    let u = u.min(7);
-    let v = v.min(7);
-    let tileset_x = (texture_id % 16) as usize * 8;
-    let tileset_y = (texture_id / 16) as usize * 8;
-    let texture_pixel_index = ((tileset_x + u) + (tileset_y + v) * 128) * 2;
-    let pixel = u16::from_be_bytes([
-        TILESET_DATA[texture_pixel_index],
-        TILESET_DATA[texture_pixel_index + 1],
-    ]);
-    Color565 { value: pixel }
-}
-
 /// Fill a triangle in the frame buffer. For texture-mapped blocks, the tileset is
 /// sampled per pixel using affine (screen-space linear) UV interpolation along each
 /// scanline - the same interpolation technique already used for the triangle edges
@@ -67,6 +51,23 @@ pub fn fill_triangle(
 
     let textured = is_textured_id(texture_id);
     let flat_color = get_quad_color_from_texture_id(texture_id).apply_light(light * 17);
+
+    // Precompute the 8x8 tile pre-lit for this triangle's light level ONCE, instead of
+    // re-doing the (division-heavy) lighting math on every single screen pixel below.
+    // A nearby block face can cover hundreds of screen pixels for the same 64 texels,
+    // so this turns an O(screen pixels) cost into a fixed O(64) one.
+    let mut lit_tile = [Color565 { value: 0 }; 64];
+    if textured {
+        let tileset_x = (texture_id % 16) as usize * 8;
+        let tileset_y = (texture_id / 16) as usize * 8;
+        for v in 0..8usize {
+            for u in 0..8usize {
+                let idx = ((tileset_x + u) + (tileset_y + v) * 128) * 2;
+                let pixel = u16::from_be_bytes([TILESET_DATA[idx], TILESET_DATA[idx + 1]]);
+                lit_tile[v * 8 + u] = Color565 { value: pixel }.apply_light(light * 17);
+            }
+        }
+    }
 
     let triangle_height = t2.y - t0.y;
     let triangle_heightf = triangle_height as f32;
@@ -129,7 +130,9 @@ pub fn fill_triangle(
             let color = if textured {
                 let t = (j as f32 - a) * inv_span;
                 let uv = uv_a + (uv_b - uv_a) * t;
-                sample_tileset(texture_id, uv.x as usize, uv.y as usize).apply_light(light * 17)
+                let u = (uv.x as usize).min(7);
+                let v = (uv.y as usize).min(7);
+                lit_tile[v * 8 + u]
             } else {
                 flat_color
             };
