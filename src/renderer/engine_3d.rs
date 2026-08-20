@@ -11,23 +11,62 @@ use crate::{
     world::World,
 };
 
-/// Fill a triangle in the frame buffer
+/// texture_ids 1..=10 are the base blocks (stone, grass, dirt, sand, cobblestone,
+/// border, log, leaves, planks) which get a real per-pixel tileset texture.
+/// Everything else (colored blocks 11..=22, and the block marker at 255) keeps the
+/// original flat-color behavior untouched.
+fn is_textured_id(texture_id: u8) -> bool {
+    (1..=10).contains(&texture_id)
+}
+
+/// Sample a single pixel (u, v both 0..=7) from the 8x8 tile belonging to `texture_id`
+/// inside the tileset image. Mirrors the exact same indexing already used by the 2D
+/// UI icon drawing code in renderer/hud.rs.
+fn sample_tileset(texture_id: u8, u: usize, v: usize) -> Color565 {
+    let u = u.min(7);
+    let v = v.min(7);
+    let tileset_x = (texture_id % 16) as usize * 8;
+    let tileset_y = (texture_id / 16) as usize * 8;
+    let texture_pixel_index = ((tileset_x + u) + (tileset_y + v) * 128) * 2;
+    let pixel = u16::from_be_bytes([
+        TILESET_DATA[texture_pixel_index],
+        TILESET_DATA[texture_pixel_index + 1],
+    ]);
+    Color565 { value: pixel }
+}
+
+/// Fill a triangle in the frame buffer. For texture-mapped blocks, the tileset is
+/// sampled per pixel using affine (screen-space linear) UV interpolation along each
+/// scanline - the same interpolation technique already used for the triangle edges
+/// below, just also applied to u/v. For anything else, every pixel gets the same flat
+/// color, exactly like before.
+#[allow(clippy::too_many_arguments)]
 pub fn fill_triangle(
     mut t0: Vector2<isize>,
     mut t1: Vector2<isize>,
     mut t2: Vector2<isize>,
+    mut uv0: Vector2<f32>,
+    mut uv1: Vector2<f32>,
+    mut uv2: Vector2<f32>,
     frame_buffer: &mut [Color565; SCREEN_TILE_WIDTH * SCREEN_TILE_HEIGHT],
-    color: Color565,
+    texture_id: u8,
+    light: u8,
 ) {
     if t0.y > t1.y {
         swap(&mut t0, &mut t1);
+        swap(&mut uv0, &mut uv1);
     }
     if t0.y > t2.y {
         swap(&mut t0, &mut t2);
+        swap(&mut uv0, &mut uv2);
     }
     if t1.y > t2.y {
         swap(&mut t1, &mut t2);
+        swap(&mut uv1, &mut uv2);
     }
+
+    let textured = is_textured_id(texture_id);
+    let flat_color = get_quad_color_from_texture_id(texture_id).apply_light(light * 17);
 
     let triangle_height = t2.y - t0.y;
     let triangle_heightf = triangle_height as f32;
@@ -54,8 +93,16 @@ pub fn fill_triangle(
             t0.x as f32 + ((t1 - t0).x as f32 * beta)
         };
 
+        let mut uv_a = uv0 + (uv2 - uv0) * alpha;
+        let mut uv_b = if second_half {
+            uv1 + (uv2 - uv1) * beta
+        } else {
+            uv0 + (uv1 - uv0) * beta
+        };
+
         if a > b {
             swap(&mut a, &mut b);
+            swap(&mut uv_a, &mut uv_b);
         }
 
         let y = t0.y + i;
@@ -71,10 +118,22 @@ pub fn fill_triangle(
             continue;
         }
 
+        let span = b - a;
+        let inv_span = if span > 0.5 { 1.0 / span } else { 0.0 };
+
         for j in (a as usize)..=(b as usize) {
             if j >= SCREEN_TILE_WIDTH {
                 continue 'height_iter;
             }
+
+            let color = if textured {
+                let t = (j as f32 - a) * inv_span;
+                let uv = uv_a + (uv_b - uv_a) * t;
+                sample_tileset(texture_id, uv.x as usize, uv.y as usize).apply_light(light * 17)
+            } else {
+                flat_color
+            };
+
             frame_buffer[j + y as usize * SCREEN_TILE_WIDTH] = color;
         }
     }
@@ -123,8 +182,12 @@ pub fn draw_2d_triangle(
             Vector2::new(tri.p1.x as isize, tri.p1.y as isize),
             Vector2::new(tri.p2.x as isize, tri.p2.y as isize),
             Vector2::new(tri.p3.x as isize, tri.p3.y as isize),
+            tri.uv1.map(|v| v as f32),
+            tri.uv2.map(|v| v as f32),
+            tri.uv3.map(|v| v as f32),
             frame_buffer,
-            get_quad_color_from_texture_id(tri.texture_id).apply_light(tri.light * 17),
+            tri.texture_id,
+            tri.light,
         );
     }
 }
@@ -203,6 +266,7 @@ pub fn triangle_clip_against_line(
 
     let binding = Default::default();
     let mut inside_points: [&Vector2<f32>; 3] = [&binding; 3];
+    let mut inside_uvs: [Vector2<u8>; 3] = [Vector2::new(0, 0); 3];
     let mut n_inside_point_count = 0;
     let mut outside_points: [&Vector2<f32>; 3] = [&binding; 3];
     let mut n_outside_point_count = 0;
@@ -217,6 +281,7 @@ pub fn triangle_clip_against_line(
 
     if d0 >= 0.0 {
         inside_points[n_inside_point_count] = &p1;
+        inside_uvs[n_inside_point_count] = in_tri.uv1;
         n_inside_point_count += 1;
     } else {
         outside_points[n_outside_point_count] = &p1;
@@ -224,6 +289,7 @@ pub fn triangle_clip_against_line(
     }
     if d1 >= 0.0 {
         inside_points[n_inside_point_count] = &p2;
+        inside_uvs[n_inside_point_count] = in_tri.uv2;
         n_inside_point_count += 1;
     } else {
         outside_points[n_outside_point_count] = &p2;
@@ -231,6 +297,7 @@ pub fn triangle_clip_against_line(
     }
     if d2 >= 0.0 {
         inside_points[n_inside_point_count] = &p3;
+        inside_uvs[n_inside_point_count] = in_tri.uv3;
         n_inside_point_count += 1;
     } else {
         outside_points[n_outside_point_count] = &p3;
@@ -250,6 +317,11 @@ pub fn triangle_clip_against_line(
             p1: inside_points[0].map(|x| x as i16),
             p2: vector_intersect_line(line_p, &line_n, inside_points[0], outside_points[0]),
             p3: vector_intersect_line(line_p, &line_n, inside_points[0], outside_points[1]),
+            uv1: inside_uvs[0],
+            // New points introduced by the clip reuse the nearest surviving vertex's
+            // UV: cheap and safe, only visible right at the screen edge.
+            uv2: inside_uvs[0],
+            uv3: inside_uvs[0],
             texture_id: in_tri.texture_id,
             light: in_tri.light,
         };
@@ -262,6 +334,9 @@ pub fn triangle_clip_against_line(
             p1: inside_points[0].map(|x| x as i16),
             p2: inside_points[1].map(|x| x as i16),
             p3: vector_intersect_line(line_p, &line_n, inside_points[0], outside_points[0]),
+            uv1: inside_uvs[0],
+            uv2: inside_uvs[1],
+            uv3: inside_uvs[0],
             texture_id: in_tri.texture_id,
             light: in_tri.light,
         };
@@ -270,6 +345,9 @@ pub fn triangle_clip_against_line(
             p1: inside_points[1].map(|x| x as i16),
             p2: out_tri1.p3,
             p3: vector_intersect_line(line_p, &line_n, inside_points[1], outside_points[0]),
+            uv1: inside_uvs[1],
+            uv2: out_tri1.uv3,
+            uv3: inside_uvs[1],
             texture_id: in_tri.texture_id,
             light: in_tri.light,
         };
@@ -291,6 +369,7 @@ pub fn triangle_clip_against_plane(
 
     let binding = Default::default();
     let mut inside_points: [&Vector3<f32>; 3] = [&binding; 3];
+    let mut inside_uvs: [Vector2<u8>; 3] = [Vector2::new(0, 0); 3];
     let mut n_inside_point_count = 0;
     let mut outside_points: [&Vector3<f32>; 3] = [&binding; 3];
     let mut n_outside_point_count = 0;
@@ -301,6 +380,7 @@ pub fn triangle_clip_against_plane(
 
     if d0 >= 0.0 {
         inside_points[n_inside_point_count] = &in_tri.p1;
+        inside_uvs[n_inside_point_count] = in_tri.uv1;
         n_inside_point_count += 1;
     } else {
         outside_points[n_outside_point_count] = &in_tri.p1;
@@ -308,6 +388,7 @@ pub fn triangle_clip_against_plane(
     }
     if d1 >= 0.0 {
         inside_points[n_inside_point_count] = &in_tri.p2;
+        inside_uvs[n_inside_point_count] = in_tri.uv2;
         n_inside_point_count += 1;
     } else {
         outside_points[n_outside_point_count] = &in_tri.p2;
@@ -315,6 +396,7 @@ pub fn triangle_clip_against_plane(
     }
     if d2 >= 0.0 {
         inside_points[n_inside_point_count] = &in_tri.p3;
+        inside_uvs[n_inside_point_count] = in_tri.uv3;
         n_inside_point_count += 1;
     } else {
         outside_points[n_outside_point_count] = &in_tri.p3;
@@ -334,6 +416,9 @@ pub fn triangle_clip_against_plane(
             p1: *inside_points[0],
             p2: vector_intersect_plane(plane_p, &plane_n, inside_points[0], outside_points[0]),
             p3: vector_intersect_plane(plane_p, &plane_n, inside_points[0], outside_points[1]),
+            uv1: inside_uvs[0],
+            uv2: inside_uvs[0],
+            uv3: inside_uvs[0],
             texture_id: in_tri.texture_id,
             light: in_tri.light,
         };
@@ -346,6 +431,9 @@ pub fn triangle_clip_against_plane(
             p1: *inside_points[0],
             p2: *inside_points[1],
             p3: vector_intersect_plane(plane_p, &plane_n, inside_points[0], outside_points[0]),
+            uv1: inside_uvs[0],
+            uv2: inside_uvs[1],
+            uv3: inside_uvs[0],
             texture_id: in_tri.texture_id,
             light: in_tri.light,
         };
@@ -354,6 +442,9 @@ pub fn triangle_clip_against_plane(
             p1: *inside_points[1],
             p2: out_tri1.p3,
             p3: vector_intersect_plane(plane_p, &plane_n, inside_points[1], outside_points[0]),
+            uv1: inside_uvs[1],
+            uv2: out_tri1.uv3,
+            uv3: inside_uvs[1],
             texture_id: in_tri.texture_id,
             light: in_tri.light,
         };
@@ -419,6 +510,9 @@ impl Renderer {
                     p3: ((self.project_point(to_project.p3) + Vector2::new(1., 1.))
                         .component_mul(&HALF_SCREEN))
                     .map(|x| x as i16),
+                    uv1: to_project.uv1,
+                    uv2: to_project.uv2,
+                    uv3: to_project.uv3,
                     texture_id: to_project.texture_id,
                     light: to_project.light,
                 };
