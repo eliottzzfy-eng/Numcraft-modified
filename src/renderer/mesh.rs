@@ -9,6 +9,10 @@ use crate::{
 
 const CHUNK_SIZE_I: isize = CHUNK_SIZE as isize;
 
+// UV corners in tile-local pixel coordinates (tiles are 8x8, so 0..=7)
+const UV_L: u8 = 0;
+const UV_H: u8 = 7;
+
 #[repr(u8)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum QuadDir {
@@ -96,6 +100,9 @@ impl Quad {
                     p1: Vector3::new(pos_x_plus_one, pos_y_plus_one, pos_z),
                     p2: Vector3::new(pos_x_plus_one, pos_y, pos_z),
                     p3: Vector3::new(pos_x, pos_y, pos_z),
+                    uv1: Vector2::new(UV_H, UV_H),
+                    uv2: Vector2::new(UV_H, UV_L),
+                    uv3: Vector2::new(UV_L, UV_L),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -103,6 +110,9 @@ impl Quad {
                     p1: Vector3::new(pos_x, pos_y, pos_z),
                     p2: Vector3::new(pos_x, pos_y_plus_one, pos_z),
                     p3: Vector3::new(pos_x_plus_one, pos_y_plus_one, pos_z),
+                    uv1: Vector2::new(UV_L, UV_L),
+                    uv2: Vector2::new(UV_L, UV_H),
+                    uv3: Vector2::new(UV_H, UV_H),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -112,6 +122,9 @@ impl Quad {
                     p1: Vector3::new(pos_x, pos_y, pos_z_plus_one),
                     p2: Vector3::new(pos_x_plus_one, pos_y, pos_z_plus_one),
                     p3: Vector3::new(pos_x_plus_one, pos_y_plus_one, pos_z_plus_one),
+                    uv1: Vector2::new(UV_L, UV_L),
+                    uv2: Vector2::new(UV_H, UV_L),
+                    uv3: Vector2::new(UV_H, UV_H),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -119,6 +132,9 @@ impl Quad {
                     p1: Vector3::new(pos_x_plus_one, pos_y_plus_one, pos_z_plus_one),
                     p2: Vector3::new(pos_x, pos_y_plus_one, pos_z_plus_one),
                     p3: Vector3::new(pos_x, pos_y, pos_z_plus_one),
+                    uv1: Vector2::new(UV_H, UV_H),
+                    uv2: Vector2::new(UV_L, UV_H),
+                    uv3: Vector2::new(UV_L, UV_L),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -128,6 +144,9 @@ impl Quad {
                     p1: Vector3::new(pos_x_plus_one, pos_y, pos_z),
                     p2: Vector3::new(pos_x_plus_one, pos_y, pos_z_plus_one),
                     p3: Vector3::new(pos_x, pos_y, pos_z_plus_one),
+                    uv1: Vector2::new(UV_H, UV_L),
+                    uv2: Vector2::new(UV_H, UV_H),
+                    uv3: Vector2::new(UV_L, UV_H),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -135,6 +154,9 @@ impl Quad {
                     p1: Vector3::new(pos_x, pos_y, pos_z_plus_one),
                     p2: Vector3::new(pos_x, pos_y, pos_z),
                     p3: Vector3::new(pos_x_plus_one, pos_y, pos_z),
+                    uv1: Vector2::new(UV_L, UV_H),
+                    uv2: Vector2::new(UV_L, UV_L),
+                    uv3: Vector2::new(UV_H, UV_L),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -144,6 +166,9 @@ impl Quad {
                     p1: Vector3::new(pos_x, pos_y_plus_one, pos_z_plus_one),
                     p2: Vector3::new(pos_x_plus_one, pos_y_plus_one, pos_z_plus_one),
                     p3: Vector3::new(pos_x_plus_one, pos_y_plus_one, pos_z),
+                    uv1: Vector2::new(UV_L, UV_H),
+                    uv2: Vector2::new(UV_H, UV_H),
+                    uv3: Vector2::new(UV_H, UV_L),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -151,6 +176,9 @@ impl Quad {
                     p1: Vector3::new(pos_x_plus_one, pos_y_plus_one, pos_z),
                     p2: Vector3::new(pos_x, pos_y_plus_one, pos_z),
                     p3: Vector3::new(pos_x, pos_y_plus_one, pos_z_plus_one),
+                    uv1: Vector2::new(UV_H, UV_L),
+                    uv2: Vector2::new(UV_L, UV_L),
+                    uv3: Vector2::new(UV_L, UV_H),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -160,6 +188,9 @@ impl Quad {
                     p3: Vector3::new(pos_x_plus_one, pos_y_plus_one, pos_z_plus_one),
                     p2: Vector3::new(pos_x_plus_one, pos_y_plus_one, pos_z),
                     p1: Vector3::new(pos_x_plus_one, pos_y, pos_z),
+                    uv3: Vector2::new(UV_H, UV_H),
+                    uv2: Vector2::new(UV_L, UV_H),
+                    uv1: Vector2::new(UV_L, UV_L),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -167,6 +198,9 @@ impl Quad {
                     p3: Vector3::new(pos_x_plus_one, pos_y, pos_z),
                     p2: Vector3::new(pos_x_plus_one, pos_y, pos_z_plus_one),
                     p1: Vector3::new(pos_x_plus_one, pos_y_plus_one, pos_z_plus_one),
+                    uv3: Vector2::new(UV_L, UV_L),
+                    uv2: Vector2::new(UV_H, UV_L),
+                    uv1: Vector2::new(UV_H, UV_H),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -176,6 +210,9 @@ impl Quad {
                     p1: Vector3::new(pos_x, pos_y_plus_one, pos_z_plus_one),
                     p2: Vector3::new(pos_x, pos_y_plus_one, pos_z),
                     p3: Vector3::new(pos_x, pos_y, pos_z),
+                    uv1: Vector2::new(UV_H, UV_H),
+                    uv2: Vector2::new(UV_L, UV_H),
+                    uv3: Vector2::new(UV_L, UV_L),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -183,6 +220,9 @@ impl Quad {
                     p1: Vector3::new(pos_x, pos_y, pos_z),
                     p2: Vector3::new(pos_x, pos_y, pos_z_plus_one),
                     p3: Vector3::new(pos_x, pos_y_plus_one, pos_z_plus_one),
+                    uv1: Vector2::new(UV_L, UV_L),
+                    uv2: Vector2::new(UV_H, UV_L),
+                    uv3: Vector2::new(UV_H, UV_H),
                     texture_id: self.texture_id,
                     light,
                 },
@@ -196,6 +236,9 @@ pub struct Triangle {
     pub p1: Vector3<f32>,
     pub p2: Vector3<f32>,
     pub p3: Vector3<f32>,
+    pub uv1: Vector2<u8>,
+    pub uv2: Vector2<u8>,
+    pub uv3: Vector2<u8>,
     pub texture_id: u8,
     pub light: u8,
 }
@@ -205,6 +248,9 @@ pub struct Triangle2D {
     pub p1: Vector2<i16>,
     pub p2: Vector2<i16>,
     pub p3: Vector2<i16>,
+    pub uv1: Vector2<u8>,
+    pub uv2: Vector2<u8>,
+    pub uv3: Vector2<u8>,
     pub texture_id: u8,
     pub light: u8,
 }
@@ -228,8 +274,23 @@ impl Triangle2D {
             (value & 0xFF) as u8,
         );
 
+        // Pack the 6 UV components (3 bits each, values 0..=7) into 3 bytes.
+        let uv_value: u32 = ((self.uv1.x as u32) << 21)
+            | ((self.uv1.y as u32) << 18)
+            | ((self.uv2.x as u32) << 15)
+            | ((self.uv2.y as u32) << 12)
+            | ((self.uv3.x as u32) << 9)
+            | ((self.uv3.y as u32) << 6);
+
+        let uv_packed = (
+            ((uv_value >> 16) & 0xFF) as u8,
+            ((uv_value >> 8) & 0xFF) as u8,
+            (uv_value & 0xFF) as u8,
+        );
+
         SmallTriangle2D {
             pos,
+            uv_packed,
             texture_id: self.texture_id,
             light: self.light,
         }
@@ -238,6 +299,7 @@ impl Triangle2D {
 
 pub struct SmallTriangle2D {
     pub pos: (u8, u8, u8, u8, u8, u8, u8),
+    pub uv_packed: (u8, u8, u8),
     pub texture_id: u8,
     pub light: u8,
 }
@@ -261,10 +323,21 @@ impl SmallTriangle2D {
         let p3x = ((value >> 9) & 0x1FF) as i16;
         let p3y = (value & 0x1FF) as i16;
 
+        let uv_value: u32 = ((self.uv_packed.0 as u32) << 16)
+            | ((self.uv_packed.1 as u32) << 8)
+            | (self.uv_packed.2 as u32);
+
+        let uv1 = Vector2::new(((uv_value >> 21) & 0x7) as u8, ((uv_value >> 18) & 0x7) as u8);
+        let uv2 = Vector2::new(((uv_value >> 15) & 0x7) as u8, ((uv_value >> 12) & 0x7) as u8);
+        let uv3 = Vector2::new(((uv_value >> 9) & 0x7) as u8, ((uv_value >> 6) & 0x7) as u8);
+
         Triangle2D {
             p1: Vector2::new(p1x, p1y),
             p2: Vector2::new(p2x, p2y),
             p3: Vector2::new(p3x, p3y),
+            uv1,
+            uv2,
+            uv3,
             texture_id: self.texture_id,
             light: self.light,
         }
