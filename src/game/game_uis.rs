@@ -112,7 +112,7 @@ impl Game {
         self.renderer
             .draw_game(&mut self.world, &self.player, 0, &self.hud, false);
 
-        let mut creative_inventory = Inventory::new(21);
+        let mut creative_inventory = Inventory::new(24);
 
         creative_inventory.fill(ItemStack::new(crate::constants::ItemType::Air, 0, true));
 
@@ -202,12 +202,21 @@ impl Game {
             ItemStack::new(crate::constants::ItemType::BlackBlock, 1, true),
         );
 
+        creative_inventory.replace_slot_item_stack(
+            21,
+            ItemStack::new(crate::constants::ItemType::TntBlock, 1, true),
+        );
+        creative_inventory.replace_slot_item_stack(
+            22,
+            ItemStack::new(crate::constants::ItemType::FlintAndSteel, 1, true),
+        );
+
         let mut inventories = [&mut self.player.inventory, &mut creative_inventory];
 
         let mut ui = GameUI::new(true)
             .with_slot_grid(Vector2::new(10, 41), 6, 3, 0, 0, 6)
             .with_slot_grid(Vector2::new(10, 139), 6, 1, 0, 18, 0)
-            .with_slot_grid(Vector2::new(218, 9), 3, 7, 1, 24, 0)
+            .with_slot_grid(Vector2::new(218, 9), 3, 8, 1, 24, 0)
             .with_links(&[
                 (12, 18, NeighborDirection::Bottom),
                 (13, 19, NeighborDirection::Bottom),
