@@ -121,3 +121,6 @@ NumWorks is a registered trademark.
 This project is not associated or affiliated with Mojang Studios.
 
 added changes : new colored blocs !
+tried  adding textures to blocs but it was too laggy so removed it.
+trying to add tnt with flint and steel
+-> next : mobs ! (maybe)
