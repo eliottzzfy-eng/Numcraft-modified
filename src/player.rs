@@ -211,8 +211,18 @@ impl Player {
         }
 
         if input_manager.is_just_pressed(nadk::keyboard::Key::Ok) {
-            // Place Block
-            if let Some(result) = &self.ray_cast_result {
+            if let Some(result) = &self.ray_cast_result
+                && result.block_type == BlockType::Tnt
+                && self
+                    .inventory
+                    .get_item_type_at_slot_index(hud.selected_slot)
+                    == Some(crate::constants::ItemType::FlintAndSteel)
+            {
+                // Ignite: not a normal block placement, and the flint and steel isn't
+                // consumed (it's a reusable tool, there's no durability system here).
+                world.explode(result.block_pos, crate::constants::world::TNT_EXPLOSION_RADIUS);
+            } else if let Some(result) = &self.ray_cast_result {
+                // Place Block
                 let block_pos = result.block_pos + result.face_dir.get_normal_vector();
                 if world
                     .chunks_manager
