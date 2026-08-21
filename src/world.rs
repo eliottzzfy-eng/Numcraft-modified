@@ -294,6 +294,30 @@ impl World {
         }
     }
 
+    /// Destroys every breakable block within `radius` blocks of `center` (a sphere,
+    /// like a TNT explosion). Border (the indestructible world edge, hardness < 0.)
+    /// is skipped. Pure destruction: no items are dropped, unlike normal mining.
+    pub fn explode(&mut self, center: Vector3<isize>, radius: isize) {
+        let radius_f = radius as f32;
+        for x in -radius..=radius {
+            for y in -radius..=radius {
+                for z in -radius..=radius {
+                    let offset = Vector3::new(x, y, z);
+                    if offset.map(|v| v as f32).norm() > radius_f {
+                        continue;
+                    }
+                    let pos = center + offset;
+                    if let Some(block) = self.chunks_manager.get_block_in_world(pos)
+                        && !block.is_air()
+                        && block.get_hardness() >= 0.
+                    {
+                        self.chunks_manager.set_block_in_world(pos, BlockType::Air);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn remove_entity(&mut self, id: usize) -> bool {
         for i in 0..self.loaded_entities.len() {
             if self.loaded_entities[i].get_id() == id {
