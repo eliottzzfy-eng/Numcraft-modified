@@ -121,6 +121,11 @@ impl GameUI {
         self
     }
 
+    /// Same as sync but for use inside a loop where self is already borrowed mutably
+    pub fn sync_mut(&mut self, inventories: &mut [&mut Inventory]) {
+        self.update_slots(inventories);
+    }
+
     pub fn get_elements(&self) -> &Vec<AnchorContainer> {
         &self.elements
     }
