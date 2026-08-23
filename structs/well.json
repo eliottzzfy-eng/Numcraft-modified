@@ -1,0 +1,35 @@
+{
+    "name": "well",
+    "size": [
+        3,
+        4,
+        3
+    ],
+    "palette": {
+        "x": 0,
+        "c": 5,
+        "b": 15
+    },
+    "data": [
+        [
+            "ccc",
+            "ccc",
+            "ccc"
+        ],
+        [
+            "ccc",
+            "cxc",
+            "ccc"
+        ],
+        [
+            "ccc",
+            "cxc",
+            "ccc"
+        ],
+        [
+            "ccc",
+            "cbc",
+            "ccc"
+        ]
+    ]
+}
