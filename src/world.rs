@@ -2,10 +2,13 @@ use core::any::Any;
 
 use crate::constants::world::{
     CHUNK_SIZE, ITEM_MAGNET_FORCE, MAX_ITEM_MERGING_DISTANCE, MAX_PLAYER_ITEM_MAGNET_DISTANCE,
+    MAX_PIGS, PIG_DIRECTION_CHANGE_INTERVAL, PIG_SPAWN_RADIUS,
+    PIG_SPAWN_TICK_INTERVAL, PIG_WALK_SPEED,
 };
 use crate::constants::{BlockType, EntityType, ItemType};
 use crate::entity::Entity;
 use crate::entity::item::ItemEntityCustomData;
+use crate::entity::pig::PigEntityData;
 use crate::inventory::{Inventory, ItemStack};
 use crate::world::chunk_manager::ChunksManager;
 use crate::world::world_generator::WorldGenerator;
@@ -29,6 +32,8 @@ pub struct World {
     loaded_entities: Vec<Entity>,
     next_available_entity_id: usize,
     world_generator: WorldGenerator,
+    /// Counts game ticks; drives natural pig spawning
+    pub pig_spawn_tick: u32,
 }
 
 pub struct RegisteredInventory {
@@ -48,9 +53,10 @@ impl World {
         let mut world = World {
             chunks_manager: ChunksManager::new(),
             registered_inventories: Vec::new(),
-            loaded_entities: vec![Entity::new(0, EntityType::Player, None)], // The player entity is always loaded and id 0
+            loaded_entities: vec![Entity::new(0, EntityType::Player, None)],
             next_available_entity_id: 1,
             world_generator: WorldGenerator::new(),
+            pig_spawn_tick: 0,
         };
 
         world
@@ -214,6 +220,9 @@ impl World {
             entity.get_type() != EntityType::Item
                 || (entity.get_type() == EntityType::Item && !entity.custom_data.is_none())
         });
+
+        // Update pig AI
+        self.update_pig_ai(delta_time);
     }
 
     /// Set the world generation seed
@@ -349,6 +358,120 @@ impl World {
             }
         }
         highest_block
+    }
+
+    /// Spawn a pig at the given world position (one block above the ground)
+    pub fn spawn_pig(&mut self, pos: Vector3<f32>) {
+        let id = self.next_available_entity_id;
+        self.next_available_entity_id += 1;
+        let mut entity = Entity::new(
+            id,
+            EntityType::Pig,
+            Some(Box::new(PigEntityData::new())),
+        );
+        entity.pos = pos;
+        entity.gravity = true;
+        self.loaded_entities.push(entity);
+    }
+
+    /// Count how many pigs are currently alive
+    pub fn count_pigs(&self) -> usize {
+        self.loaded_entities
+            .iter()
+            .filter(|e| e.get_type() == EntityType::Pig)
+            .count()
+    }
+
+    /// Update pig AI: random walk with periodic direction changes.
+    /// Called from update_entities every tick.
+    pub fn update_pig_ai(&mut self, delta_time: f32) {
+        // Collect pig ids first to avoid borrow issues
+        let pig_ids: Vec<usize> = self
+            .loaded_entities
+            .iter()
+            .filter(|e| e.get_type() == EntityType::Pig)
+            .map(|e| e.get_id())
+            .collect();
+
+        for pig_id in pig_ids {
+            // Get a deterministic-ish direction based on the pig's id and current time
+            let (new_timer, new_vx, new_vz) = {
+                let entity = self
+                    .loaded_entities
+                    .iter()
+                    .find(|e| e.get_id() == pig_id)
+                    .unwrap();
+                let pig_data = PigEntityData::get_pig_data(entity).unwrap();
+                let timer = pig_data.direction_timer - delta_time;
+                if timer <= 0.0 {
+                    // Pick a new direction using a simple hash of id + position
+                    let hash = (pig_id as f32 * 1234.5
+                        + entity.pos.x * 7.3
+                        + entity.pos.z * 3.7) as i32;
+                    let angle_idx = hash.unsigned_abs() % 8;
+                    let (vx, vz) = match angle_idx {
+                        0 => (1.0_f32, 0.0_f32),
+                        1 => (0.7, 0.7),
+                        2 => (0.0, 1.0),
+                        3 => (-0.7, 0.7),
+                        4 => (-1.0, 0.0),
+                        5 => (-0.7, -0.7),
+                        6 => (0.0, -1.0),
+                        _ => (0.7, -0.7),
+                    };
+                    (PIG_DIRECTION_CHANGE_INTERVAL, vx * PIG_WALK_SPEED, vz * PIG_WALK_SPEED)
+                } else {
+                    (timer, entity.velocity.x, entity.velocity.z)
+                }
+            };
+
+            let entity = self
+                .loaded_entities
+                .iter_mut()
+                .find(|e| e.get_id() == pig_id)
+                .unwrap();
+            entity.velocity.x = new_vx;
+            entity.velocity.z = new_vz;
+            if let Some(data) = PigEntityData::get_pig_data_mut(entity) {
+                data.direction_timer = new_timer;
+            }
+        }
+    }
+
+    /// Try to spawn a pig naturally near the player. Call once per game tick.
+    /// Spawns only if fewer than MAX_PIGS pigs exist and the random tick fires.
+    pub fn try_natural_pig_spawn(&mut self, player_pos: Vector3<f32>) {
+        self.pig_spawn_tick = self.pig_spawn_tick.wrapping_add(1);
+        if self.pig_spawn_tick % PIG_SPAWN_TICK_INTERVAL != 0 {
+            return;
+        }
+        if self.count_pigs() >= MAX_PIGS {
+            return;
+        }
+
+        // Pick a candidate position using a cheap hash of the tick counter
+        let tick = self.pig_spawn_tick as isize;
+        let dx = (tick * 7 % (PIG_SPAWN_RADIUS * 2)) - PIG_SPAWN_RADIUS;
+        let dz = (tick * 13 % (PIG_SPAWN_RADIUS * 2)) - PIG_SPAWN_RADIUS;
+        let spawn_x = player_pos.x as isize + dx;
+        let spawn_z = player_pos.z as isize + dz;
+        let spawn_y = self.get_highest_block(spawn_x, spawn_z);
+
+        // Only spawn on a solid block with air above it
+        let ground = self
+            .chunks_manager
+            .get_block_in_world(Vector3::new(spawn_x, spawn_y - 1, spawn_z));
+        let above = self
+            .chunks_manager
+            .get_block_in_world(Vector3::new(spawn_x, spawn_y, spawn_z));
+
+        if ground.is_some_and(|b| !b.is_air()) && above.is_some_and(|b| b.is_air()) {
+            self.spawn_pig(Vector3::new(
+                spawn_x as f32 + 0.5,
+                spawn_y as f32 + 0.5,
+                spawn_z as f32 + 0.5,
+            ));
+        }
     }
 
     /// Clear all the chunks and entities
