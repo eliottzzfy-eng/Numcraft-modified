@@ -8,7 +8,7 @@ use crate::{
     constants::world::*,
     world::{
         chunk_manager::ChunksManager,
-        structures::{Structure, TREE1},
+        structures::{Structure, HOUSE1, TREE1, WELL},
     },
 };
 
@@ -16,13 +16,18 @@ const CHUNK_SIZE_I: isize = CHUNK_SIZE as isize;
 
 pub struct WorldGenerator {
     noise: FastNoiseLite,
+    /// Whether the village has already been placed in this world
+    village_placed: bool,
 }
 
 impl WorldGenerator {
     pub fn new() -> Self {
         let mut noise = FastNoiseLite::new();
         noise.set_noise_type(Some(fastnoise_lite::NoiseType::OpenSimplex2));
-        WorldGenerator { noise }
+        WorldGenerator {
+            noise,
+            village_placed: false,
+        }
     }
 
     pub fn set_seed(&mut self, seed: i32) {
@@ -34,7 +39,7 @@ impl WorldGenerator {
         chunks_manager: &mut ChunksManager,
         chunk_pos: Vector3<isize>,
     ) {
-        let chunk = chunks_manager.get_chunk_at_pos_mut(chunk_pos).unwrap(); // I assume that a valid pos is given to the generator
+        let chunk = chunks_manager.get_chunk_at_pos_mut(chunk_pos).unwrap();
 
         if chunk.generated {
             return;
@@ -52,7 +57,6 @@ impl WorldGenerator {
                     (z as isize + chunk_block_pos.z) as f32,
                 );
                 let height = roundf((negative_1_to_1 + 1.) / 2. * 14.0 + 8.0) as isize;
-
                 height_map[x + z * CHUNK_SIZE] = height;
             }
         }
@@ -60,24 +64,20 @@ impl WorldGenerator {
         for x in 0..CHUNK_SIZE_I {
             for z in 0..CHUNK_SIZE_I {
                 let height = height_map[x as usize + z as usize * CHUNK_SIZE];
-
                 for y in 0..CHUNK_SIZE_I {
                     let block_y = chunk_block_pos.y + y;
-
                     if block_y == height {
                         chunk.set_at(
                             Vector3::new(x as usize, y as usize, z as usize),
                             crate::constants::BlockType::Grass,
                         );
                     }
-
                     if block_y < height && block_y >= height - 3 {
                         chunk.set_at(
                             Vector3::new(x as usize, y as usize, z as usize),
                             crate::constants::BlockType::Dirt,
                         );
                     }
-
                     if block_y < height - 3 {
                         chunk.set_at(
                             Vector3::new(x as usize, y as usize, z as usize),
@@ -112,6 +112,88 @@ impl WorldGenerator {
                 }
             }
         }
+
+        // Place the village once, in the spawn chunk (0, y, 0)
+        if !self.village_placed && chunk_pos.x == 0 && chunk_pos.z == 0 {
+            self.village_placed = true;
+            // Ground height at center of spawn chunk (block 4,_,4)
+            let ground_y = height_map[4 + 4 * CHUNK_SIZE];
+            let center = Vector3::new(
+                chunk_block_pos.x + 4,
+                ground_y + 1,
+                chunk_block_pos.z + 4,
+            );
+            self.place_village(chunks_manager, center);
+        }
+    }
+
+    /// Place a small village centered at `center` (one block above ground).
+    /// Layout: puits au centre, 4 maisons aux 4 coins, chemins en planches.
+    fn place_village(&self, chunks_manager: &mut ChunksManager, center: Vector3<isize>) {
+        // ── Puits au centre ─────────────────────────────────────────────────
+        let well_pos = center + Vector3::new(-1, -1, -1); // centré sur 3 blocs
+        self.place_struct(chunks_manager, &WELL, well_pos);
+
+        // ── 4 maisons (7×6 empreinte) aux 4 coins ───────────────────────────
+        // Offset: assez loin du puits (rayon ~10 blocs) pour qu'il y ait de la place
+        let house_offsets: [(isize, isize); 4] = [
+            (-12, -10),  // nord-ouest
+            (  6, -10),  // nord-est
+            (-12,   5),  // sud-ouest
+            (  6,   5),  // sud-est
+        ];
+
+        for (dx, dz) in house_offsets {
+            let house_pos = Vector3::new(center.x + dx, center.y - 1, center.z + dz);
+            self.place_struct(chunks_manager, &HOUSE1, house_pos);
+        }
+
+        // ── Chemins en planches reliant les maisons au puits ────────────────
+        // On trace 4 segments droits : du centre vers chaque maison
+        let path_targets: [(isize, isize, isize, isize); 4] = [
+            (-8, -5, -2, -1),   // vers nord-ouest
+            ( 3, -5,  2, -1),   // vers nord-est
+            (-8,  3, -2,  2),   // vers sud-ouest
+            ( 3,  3,  2,  2),   // vers sud-est
+        ];
+        for (x1, z1, x2, z2) in path_targets {
+            self.place_path(
+                chunks_manager,
+                center + Vector3::new(x1, -1, z1),
+                center + Vector3::new(x2, -1, z2),
+            );
+        }
+    }
+
+    /// Draw a straight plank path between two world positions (same Y).
+    fn place_path(
+        &self,
+        chunks_manager: &mut ChunksManager,
+        from: Vector3<isize>,
+        to: Vector3<isize>,
+    ) {
+        let dx = (to.x - from.x).signum();
+        let dz = (to.z - from.z).signum();
+        let mut pos = from;
+        let y = from.y;
+
+        loop {
+            // Place planks on the surface (replace only grass/air/dirt on top)
+            let surface = Vector3::new(pos.x, y, pos.z);
+            chunks_manager.set_block_in_world(surface, crate::constants::BlockType::Planks);
+
+            if pos.x == to.x && pos.z == to.z {
+                break;
+            }
+            // Bresenham-ish: advance on the longer axis first
+            let rem_x = (to.x - pos.x).abs();
+            let rem_z = (to.z - pos.z).abs();
+            if rem_x >= rem_z {
+                pos.x += dx;
+            } else {
+                pos.z += dz;
+            }
+        }
     }
 
     /// Place a structure only if there is enough space
@@ -126,7 +208,7 @@ impl WorldGenerator {
             for x in (-margins.x)..structure.size.x as isize + margins.x {
                 for z in (-margins.z)..structure.size.z as isize + margins.z {
                     if !chunks_manager
-                        .get_block_in_world(pos + Vector3::new(x as isize, y as isize, z as isize))
+                        .get_block_in_world(pos + Vector3::new(x, y, z))
                         .is_none_or(|b| b.is_air())
                     {
                         return;
