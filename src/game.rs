@@ -198,6 +198,10 @@ impl Game {
             self.physic_engine
                 .process(&mut self.world, self.timing_manager.get_delta_time());
 
+            // Natural pig spawning
+            let player_pos = self.world.get_player_entity().pos;
+            self.world.try_natural_pig_spawn(player_pos);
+
             self.renderer.draw_game(
                 &mut self.world,
                 &self.player,
