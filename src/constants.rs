@@ -56,6 +56,17 @@ pub mod world {
     pub const MAX_PLAYER_ITEM_MAGNET_DISTANCE: f32 = 2.2;
 
     pub const TNT_EXPLOSION_RADIUS: isize = 2;
+
+    /// Max pigs alive at the same time in the world
+    pub const MAX_PIGS: usize = 4;
+    /// How far from the player a pig can naturally spawn (in blocks)
+    pub const PIG_SPAWN_RADIUS: isize = 12;
+    /// How many game ticks between natural spawn attempts (≈50ms/tick → 200 = ~10s)
+    pub const PIG_SPAWN_TICK_INTERVAL: u32 = 200;
+    /// Pig walk speed (blocks/s)
+    pub const PIG_WALK_SPEED: f32 = 1.5;
+    /// How long (seconds) a pig walks in one direction before changing
+    pub const PIG_DIRECTION_CHANGE_INTERVAL: f32 = 2.0;
 }
 
 pub mod player {
@@ -90,6 +101,10 @@ impl EntityType {
                 offset: Vector3::new(-0.2, -0.2, -0.2),
                 size: Vector3::new(0.4, 0.4, 0.4),
             }),
+            EntityType::Pig => Some(BoundingBox {
+                offset: Vector3::new(-0.45, -0.45, -0.45),
+                size: Vector3::new(0.9, 0.9, 0.9),
+            }),
         }
     }
 }
@@ -98,6 +113,7 @@ impl EntityType {
 pub enum EntityType {
     Player = 0,
     Item = 1,
+    Pig = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,6 +142,7 @@ pub enum BlockType {
     Gray = 20,
     Black = 21,
     Tnt = 22,
+    Stairs = 23,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -158,6 +175,9 @@ pub enum ItemType {
     TntBlock = 22,
     // Not a block: used to ignite Tnt when used on it, never placed itself
     FlintAndSteel = 23,
+    // Not a block: spawns a pig on the targeted block surface
+    PigSpawnEgg = 24,
+    StairsBlock = 25,
 }
 
 impl ItemType {
@@ -189,6 +209,9 @@ impl ItemType {
             ItemType::BlackBlock => 22,
             ItemType::TntBlock => 23,
             ItemType::FlintAndSteel => 24,
+            ItemType::PigSpawnEgg => 25,
+            // Stairs reuse planks texture (id 10) — same wood color
+            ItemType::StairsBlock => 10,
         }
     }
 
@@ -220,6 +243,8 @@ impl ItemType {
             21 => Some(ItemType::BlackBlock),
             22 => Some(ItemType::TntBlock),
             23 => Some(ItemType::FlintAndSteel),
+            24 => Some(ItemType::PigSpawnEgg),
+            25 => Some(ItemType::StairsBlock),
             _ => None,
         }
     }
@@ -250,8 +275,9 @@ impl ItemType {
             ItemType::GrayBlock => 64,
             ItemType::BlackBlock => 64,
             ItemType::TntBlock => 64,
-            // A tool, not a stack of blocks: doesn't stack.
             ItemType::FlintAndSteel => 1,
+            ItemType::PigSpawnEgg => 16,
+            ItemType::StairsBlock => 64,
         }
     }
 
@@ -281,8 +307,9 @@ impl ItemType {
             ItemType::GrayBlock => Some(BlockType::Gray),
             ItemType::BlackBlock => Some(BlockType::Black),
             ItemType::TntBlock => Some(BlockType::Tnt),
-            // Not placeable on its own - using it does something only when aimed at Tnt.
             ItemType::FlintAndSteel => None,
+            ItemType::PigSpawnEgg => None,
+            ItemType::StairsBlock => Some(BlockType::Stairs),
         }
     }
 }
@@ -324,6 +351,8 @@ impl BlockType {
             BlockType::Gray => 21,
             BlockType::Black => 22,
             BlockType::Tnt => 23,
+            // Stairs reuse planks texture (id 10)
+            BlockType::Stairs => 10,
         }
     }
 
@@ -353,6 +382,7 @@ impl BlockType {
             20 => Some(BlockType::Gray),
             21 => Some(BlockType::Black),
             22 => Some(BlockType::Tnt),
+            23 => Some(BlockType::Stairs),
             _ => None,
         }
     }
@@ -384,6 +414,7 @@ impl BlockType {
             BlockType::Gray => 0.8,
             BlockType::Black => 0.8,
             BlockType::Tnt => 0.5,
+            BlockType::Stairs => 1.2,
         }
     }
 
@@ -413,6 +444,7 @@ impl BlockType {
             BlockType::Gray => ItemType::GrayBlock,
             BlockType::Black => ItemType::BlackBlock,
             BlockType::Tnt => ItemType::TntBlock,
+            BlockType::Stairs => ItemType::StairsBlock,
         }
     }
 }
@@ -443,6 +475,8 @@ pub fn get_quad_color_from_texture_id(id: u8) -> Color565 {
         22 => Color565::from_rgb888(25, 25, 25),    // Black
 
         23 => Color565::from_rgb888(198, 82, 28), // Tnt
+
+        // 24 = flint and steel icon, 25 = pig spawn egg icon (inventory only)
 
         _ => Color565::from_rgb888(0, 0, 0),
         // 255 is reserved for block outline
