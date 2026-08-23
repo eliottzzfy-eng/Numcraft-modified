@@ -7,6 +7,7 @@ use crate::{constants::EntityType, physic::BoundingBox};
 calc_use!(alloc::boxed::Box);
 
 pub mod item;
+pub mod pig;
 
 pub struct Entity {
     id: usize,
