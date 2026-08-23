@@ -63,6 +63,46 @@ impl Renderer {
                     );
                 }
             }
+
+            if let EntityType::Pig = entity.get_type() {
+                let pos = entity.pos;
+                let transformed = (mat_view * Vector4::new(pos.x, pos.y, pos.z, 1.0)).xyz();
+                let projected = (self.project_point(transformed) + Vector2::new(1., 1.))
+                    .component_mul(&HALF_SCREEN);
+
+                let tile_offset = Vector2::new(
+                    -((SCREEN_TILE_WIDTH * tile_x) as isize),
+                    -((SCREEN_TILE_HEIGHT * tile_y) as isize),
+                );
+
+                let pig_world_size: f32 = ITEM_ENTITY_SPRITE_SIZE * 3.0;
+                let sprite_size: isize =
+                    ((pig_world_size / self.camera.get_pos().metric_distance(&pos))
+                        * (SCREEN_HEIGHTF / tanf(2.0 * (FOV / 2.0)))) as isize;
+
+                let point = projected.map(|v| v as isize) + tile_offset;
+                let top_left = point.map(|v| v - sprite_size / 2);
+
+                if sprite_size > 0
+                    && top_left.x < SCREEN_TILE_WIDTH as isize
+                    && top_left.y < SCREEN_TILE_HEIGHT as isize
+                    && top_left.x + sprite_size > 0
+                    && top_left.y + sprite_size > 0
+                {
+                    // Fill a flat pink square directly into the frame buffer —
+                    // no tileset needed, same approach as block flat colors.
+                    let pig_color = Color565::from_rgb888(240, 160, 180);
+                    let x_start = top_left.x.max(0) as usize;
+                    let x_end = (top_left.x + sprite_size).min(SCREEN_TILE_WIDTH as isize) as usize;
+                    let y_start = top_left.y.max(0) as usize;
+                    let y_end = (top_left.y + sprite_size).min(SCREEN_TILE_HEIGHT as isize) as usize;
+                    for py in y_start..y_end {
+                        for px in x_start..x_end {
+                            self.tile_frame_buffer[px + py * SCREEN_TILE_WIDTH] = pig_color;
+                        }
+                    }
+                }
+            }
         }
     }
 
