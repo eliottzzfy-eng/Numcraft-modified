@@ -141,6 +141,7 @@ impl Game {
             crate::constants::ItemType::FlintAndSteel,
             crate::constants::ItemType::PigSpawnEgg,
             crate::constants::ItemType::StairsBlock,
+            crate::constants::ItemType::SlabBlock,
         ];
 
         // ── Scroll constants ──────────────────────────────────────────────────
