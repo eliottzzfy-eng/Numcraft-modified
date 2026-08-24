@@ -1,0 +1,52 @@
+{
+    "name": "small_house",
+    "size": [
+        5,
+        5,
+        5
+    ],
+    "palette": {
+        "x": 0,
+        "p": 9,
+        "c": 5,
+        "e": 25,
+        "w": 26
+    },
+    "data": [
+        [
+            "ppppp",
+            "ppppp",
+            "ppppp",
+            "ppppp",
+            "ppppp"
+        ],
+        [
+            "ppxpp",
+            "pxxxp",
+            "pxxxp",
+            "pxxxp",
+            "ppppp"
+        ],
+        [
+            "ppxpp",
+            "pxxxp",
+            "pxxxp",
+            "pxxxp",
+            "ppppp"
+        ],
+        [
+            "ppppp",
+            "pxxxp",
+            "pxxxp",
+            "pxxxp",
+            "ppppp"
+        ],
+        [
+            "eecww",
+            "eecww",
+            "eecww",
+            "eecww",
+            "eecww"
+        ]
+    ]
+}
