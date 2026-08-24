@@ -237,12 +237,30 @@ impl Player {
                     .get_block_in_world(block_pos)
                     .is_some_and(|b| b.is_air())
                     && physic_engine.can_place_block(world, block_pos)
-                    && let Some(item_type) = self.inventory.take_one(0 + hud.selected_slot)
-                    && let Some(block_type) = item_type.get_matching_block_type()
+                    && let Some(item_type) = self.inventory.take_one(hud.selected_slot)
                 {
-                    world
-                        .chunks_manager
-                        .set_block_in_world(block_pos, block_type);
+                    // For stairs, choose orientation based on camera facing direction
+                    let block_type = if item_type == crate::constants::ItemType::StairsBlock {
+                        let fwd = camera.get_forward_vector();
+                        // Project onto XZ plane: pick dominant axis then sign
+                        if fwd.z.abs() >= fwd.x.abs() {
+                            if fwd.z >= 0.0 {
+                                crate::constants::BlockType::StairsSouth
+                            } else {
+                                crate::constants::BlockType::StairsNorth
+                            }
+                        } else if fwd.x >= 0.0 {
+                            crate::constants::BlockType::StairsEast
+                        } else {
+                            crate::constants::BlockType::StairsWest
+                        }
+                    } else {
+                        match item_type.get_matching_block_type() {
+                            Some(bt) => bt,
+                            None => { return; }
+                        }
+                    };
+                    world.chunks_manager.set_block_in_world(block_pos, block_type);
                 }
             }
         }
