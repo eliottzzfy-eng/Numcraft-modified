@@ -357,8 +357,13 @@ fn get_block_pattern_shade(block_type: BlockType, x: isize, y: isize, z: isize) 
             1 => 1,
             _ => 0,
         },
-        // Horizontal board lines
-        BlockType::Planks => match y.rem_euclid(4) {
+        // Horizontal board lines (planks, stairs and slab share wood texture)
+        BlockType::Planks
+        | BlockType::StairsSouth
+        | BlockType::StairsNorth
+        | BlockType::StairsEast
+        | BlockType::StairsWest
+        | BlockType::Slab => match y.rem_euclid(4) {
             0 => 1,
             2 => 2,
             _ => 0,
@@ -382,6 +387,9 @@ fn get_block_pattern_shade(block_type: BlockType, x: isize, y: isize, z: isize) 
 
 pub struct Mesh {
     pub quads: Vec<Quad>,
+    /// Triangles with arbitrary float positions (used for non-cubic block shapes
+    /// like stairs). Rendered after quads in the same frame.
+    pub direct_triangles: Vec<Triangle>,
 }
 
 impl Default for Mesh {
@@ -392,7 +400,10 @@ impl Default for Mesh {
 
 impl Mesh {
     pub fn new() -> Self {
-        Mesh { quads: Vec::new() }
+        Mesh {
+            quads: Vec::new(),
+            direct_triangles: Vec::new(),
+        }
     }
 
     pub fn get_reference_vec(&mut self) -> &mut Vec<Quad> {
@@ -413,91 +424,254 @@ impl Mesh {
 
     pub fn generate_chunk(chunks_manager: &ChunksManager, chunk: &Chunk) -> Self {
         let mut quads = Vec::new();
+        let mut direct_triangles: Vec<Triangle> = Vec::new();
+
+        let chunk_world_pos = chunk.get_pos().map(|v| v * CHUNK_SIZE_I);
 
         for x in 0..CHUNK_SIZE as isize {
             for y in 0..CHUNK_SIZE as isize {
                 for z in 0..CHUNK_SIZE as isize {
                     let block_type = chunk.get_at_unchecked(Vector3::new(x, y, z));
-                    if block_type != BlockType::Air {
-                        let bloc_pos = Vector3::new(x as u16, y as u16, z as u16);
+                    if block_type == BlockType::Air {
+                        continue;
+                    }
 
-                        let grid_additional_light = get_block_pattern_shade(block_type, x, y, z); // Fake per-block "texture" pattern using only flat shading
+                    // Stairs: emit custom float-position triangles, skip quad path
+                    if matches!(block_type,
+                        BlockType::StairsSouth | BlockType::StairsNorth |
+                        BlockType::StairsEast  | BlockType::StairsWest)
+                    {
+                        let wx = x + chunk_world_pos.x;
+                        let wy = y + chunk_world_pos.y;
+                        let wz = z + chunk_world_pos.z;
+                        let light = Mesh::get_light_level_from_dir(QuadDir::Top) as u8;
+                        let tid = block_type.get_texture_id(QuadDir::Top);
+                        Mesh::emit_stair_triangles(wx, wy, wz, block_type, light, tid, &mut direct_triangles);
+                        continue;
+                    }
 
-                        if get_block_in_chunk_or_world(Vector3::new(x, y, z - 1), chunks_manager, chunk)
-                            .is_some_and(|block| block.is_air())
-                        {
-                            quads.push(Quad::new(
-                                bloc_pos,
-                                QuadDir::Front,
-                                block_type.get_texture_id(QuadDir::Front),
-                                Mesh::get_light_level_from_dir(QuadDir::Front)
-                                    - grid_additional_light,
-                            ));
-                        }
+                    // Slab: flat half-block, same principle
+                    if block_type == BlockType::Slab {
+                        let wx = x + chunk_world_pos.x;
+                        let wy = y + chunk_world_pos.y;
+                        let wz = z + chunk_world_pos.z;
+                        let light = Mesh::get_light_level_from_dir(QuadDir::Top) as u8;
+                        let tid = block_type.get_texture_id(QuadDir::Top);
+                        Mesh::emit_slab_triangles(wx, wy, wz, light, tid, &mut direct_triangles);
+                        continue;
+                    }
 
-                        if get_block_in_chunk_or_world(Vector3::new(x, y, z + 1), chunks_manager, chunk)
-                            .is_some_and(|block| block.is_air())
-                        {
-                            quads.push(Quad::new(
-                                bloc_pos,
-                                QuadDir::Back,
-                                block_type.get_texture_id(QuadDir::Back),
-                                Mesh::get_light_level_from_dir(QuadDir::Back)
-                                    - grid_additional_light,
-                            ));
-                        }
+                    let bloc_pos = Vector3::new(x as u16, y as u16, z as u16);
+                    let grid_additional_light = get_block_pattern_shade(block_type, x, y, z);
 
-                        if get_block_in_chunk_or_world(Vector3::new(x - 1, y, z), chunks_manager, chunk)
-                            .is_some_and(|block| block.is_air())
-                        {
-                            quads.push(Quad::new(
-                                bloc_pos,
-                                QuadDir::Right,
-                                block_type.get_texture_id(QuadDir::Right),
-                                Mesh::get_light_level_from_dir(QuadDir::Right)
-                                    - grid_additional_light,
-                            ));
-                        }
-                        if get_block_in_chunk_or_world(Vector3::new(x + 1, y, z), chunks_manager, chunk)
-                            .is_some_and(|block| block.is_air())
-                        {
-                            quads.push(Quad::new(
-                                bloc_pos,
-                                QuadDir::Left,
-                                block_type.get_texture_id(QuadDir::Left),
-                                Mesh::get_light_level_from_dir(QuadDir::Left)
-                                    - grid_additional_light,
-                            ));
-                        }
-
-                        if get_block_in_chunk_or_world(Vector3::new(x, y + 1, z), chunks_manager, chunk)
-                            .is_some_and(|block| block.is_air())
-                        {
-                            quads.push(Quad::new(
-                                bloc_pos,
-                                QuadDir::Top,
-                                block_type.get_texture_id(QuadDir::Top),
-                                Mesh::get_light_level_from_dir(QuadDir::Top)
-                                    - grid_additional_light,
-                            ));
-                        }
-
-                        if get_block_in_chunk_or_world(Vector3::new(x, y - 1, z), chunks_manager, chunk)
-                            .is_some_and(|block| block.is_air())
-                        {
-                            quads.push(Quad::new(
-                                bloc_pos,
-                                QuadDir::Bottom,
-                                block_type.get_texture_id(QuadDir::Bottom),
-                                Mesh::get_light_level_from_dir(QuadDir::Bottom)
-                                    - grid_additional_light,
-                            ));
-                        }
+                    if get_block_in_chunk_or_world(Vector3::new(x, y, z - 1), chunks_manager, chunk)
+                        .is_some_and(|block| block.is_air())
+                    {
+                        quads.push(Quad::new(
+                            bloc_pos,
+                            QuadDir::Front,
+                            block_type.get_texture_id(QuadDir::Front),
+                            Mesh::get_light_level_from_dir(QuadDir::Front) - grid_additional_light,
+                        ));
+                    }
+                    if get_block_in_chunk_or_world(Vector3::new(x, y, z + 1), chunks_manager, chunk)
+                        .is_some_and(|block| block.is_air())
+                    {
+                        quads.push(Quad::new(
+                            bloc_pos,
+                            QuadDir::Back,
+                            block_type.get_texture_id(QuadDir::Back),
+                            Mesh::get_light_level_from_dir(QuadDir::Back) - grid_additional_light,
+                        ));
+                    }
+                    if get_block_in_chunk_or_world(Vector3::new(x - 1, y, z), chunks_manager, chunk)
+                        .is_some_and(|block| block.is_air())
+                    {
+                        quads.push(Quad::new(
+                            bloc_pos,
+                            QuadDir::Right,
+                            block_type.get_texture_id(QuadDir::Right),
+                            Mesh::get_light_level_from_dir(QuadDir::Right) - grid_additional_light,
+                        ));
+                    }
+                    if get_block_in_chunk_or_world(Vector3::new(x + 1, y, z), chunks_manager, chunk)
+                        .is_some_and(|block| block.is_air())
+                    {
+                        quads.push(Quad::new(
+                            bloc_pos,
+                            QuadDir::Left,
+                            block_type.get_texture_id(QuadDir::Left),
+                            Mesh::get_light_level_from_dir(QuadDir::Left) - grid_additional_light,
+                        ));
+                    }
+                    if get_block_in_chunk_or_world(Vector3::new(x, y + 1, z), chunks_manager, chunk)
+                        .is_some_and(|block| block.is_air())
+                    {
+                        quads.push(Quad::new(
+                            bloc_pos,
+                            QuadDir::Top,
+                            block_type.get_texture_id(QuadDir::Top),
+                            Mesh::get_light_level_from_dir(QuadDir::Top) - grid_additional_light,
+                        ));
+                    }
+                    if get_block_in_chunk_or_world(Vector3::new(x, y - 1, z), chunks_manager, chunk)
+                        .is_some_and(|block| block.is_air())
+                    {
+                        quads.push(Quad::new(
+                            bloc_pos,
+                            QuadDir::Bottom,
+                            block_type.get_texture_id(QuadDir::Bottom),
+                            Mesh::get_light_level_from_dir(QuadDir::Bottom) - grid_additional_light,
+                        ));
                     }
                 }
             }
         }
 
-        Mesh { quads }
+        Mesh { quads, direct_triangles }
+    }
+
+    /// Emit stair geometry as raw float-position Triangles, in one of 4 orientations.
+    ///
+    /// The "step" (top half) always faces the direction the player was looking when
+    /// they placed the block:
+    ///   StairsSouth → step face toward +Z (climb from +Z side)
+    ///   StairsNorth → step face toward -Z (climb from -Z side)
+    ///   StairsEast  → step face toward +X (climb from +X side)
+    ///   StairsWest  → step face toward -X (climb from -X side)
+    fn emit_stair_triangles(
+        wx: isize, wy: isize, wz: isize,
+        variant: BlockType,
+        _light: u8, tid: u8,
+        out: &mut Vec<Triangle>,
+    ) {
+        let x0 = wx as f32; let x1 = x0 + 1.0;
+        let y0 = wy as f32; let y_mid = y0 + 0.5; let y1 = y0 + 1.0;
+        let z0 = wz as f32; let z_mid = z0 + 0.5; let z1 = z0 + 1.0;
+        let x_mid = x0 + 0.5;
+
+        let lf = 13u8; let lb = 10u8; let lt = 15u8;
+        let lbo = 6u8; let lr = 11u8; let ll = 10u8;
+
+        macro_rules! tri2 {
+            ($a:expr, $b:expr, $c:expr, $d:expr, $l:expr) => {
+                out.push(Triangle { p1: $a, p2: $b, p3: $c, texture_id: tid, light: $l });
+                out.push(Triangle { p1: $c, p2: $d, p3: $a, texture_id: tid, light: $l });
+            };
+        }
+
+        match variant {
+            // ── StairsSouth: step toward +Z, climb from the +Z side ──────────
+            BlockType::StairsSouth => {
+                // Bottom slab (full XZ, y0→y_mid)
+                tri2!(Vector3::new(x0,y0,z0), Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x0,y0,z1), lbo); // floor
+                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x1,y_mid,z0), Vector3::new(x1,y_mid,z_mid), Vector3::new(x0,y_mid,z_mid), lt); // top exposed (front half)
+                tri2!(Vector3::new(x1,y_mid,z0), Vector3::new(x1,y0,z0), Vector3::new(x0,y0,z0), Vector3::new(x0,y_mid,z0), lf); // front face
+                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x0,y_mid,z1), lb); // back face
+                tri2!(Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y_mid,z0), lr); // right
+                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x0,y_mid,z1), Vector3::new(x0,y0,z1), Vector3::new(x0,y0,z0), ll); // left
+                // Top step (front half XZ, y_mid→y1)
+                tri2!(Vector3::new(x0,y1,z0), Vector3::new(x1,y1,z0), Vector3::new(x1,y1,z_mid), Vector3::new(x0,y1,z_mid), lt); // top
+                tri2!(Vector3::new(x1,y1,z0), Vector3::new(x1,y_mid,z0), Vector3::new(x0,y_mid,z0), Vector3::new(x0,y1,z0), lf); // front
+                tri2!(Vector3::new(x0,y_mid,z_mid), Vector3::new(x1,y_mid,z_mid), Vector3::new(x1,y1,z_mid), Vector3::new(x0,y1,z_mid), lb); // riser
+                tri2!(Vector3::new(x1,y_mid,z0), Vector3::new(x1,y_mid,z_mid), Vector3::new(x1,y1,z_mid), Vector3::new(x1,y1,z0), lr); // right
+                tri2!(Vector3::new(x0,y1,z0), Vector3::new(x0,y1,z_mid), Vector3::new(x0,y_mid,z_mid), Vector3::new(x0,y_mid,z0), ll); // left
+            }
+            // ── StairsNorth: step toward -Z, climb from the -Z side ──────────
+            BlockType::StairsNorth => {
+                // Bottom slab
+                tri2!(Vector3::new(x0,y0,z0), Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x0,y0,z1), lbo);
+                tri2!(Vector3::new(x0,y_mid,z_mid), Vector3::new(x1,y_mid,z_mid), Vector3::new(x1,y_mid,z1), Vector3::new(x0,y_mid,z1), lt); // top exposed (back half)
+                tri2!(Vector3::new(x1,y_mid,z0), Vector3::new(x1,y0,z0), Vector3::new(x0,y0,z0), Vector3::new(x0,y_mid,z0), lf);
+                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x0,y_mid,z1), lb);
+                tri2!(Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y_mid,z0), lr);
+                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x0,y_mid,z1), Vector3::new(x0,y0,z1), Vector3::new(x0,y0,z0), ll);
+                // Top step (back half XZ, y_mid→y1)
+                tri2!(Vector3::new(x0,y1,z_mid), Vector3::new(x1,y1,z_mid), Vector3::new(x1,y1,z1), Vector3::new(x0,y1,z1), lt); // top
+                tri2!(Vector3::new(x0,y_mid,z_mid), Vector3::new(x1,y_mid,z_mid), Vector3::new(x1,y1,z_mid), Vector3::new(x0,y1,z_mid), lf); // riser (front of step)
+                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x1,y0,z1), Vector3::new(x1,y1,z1), Vector3::new(x0,y1,z1), lb); // back
+                tri2!(Vector3::new(x1,y_mid,z_mid), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y1,z1), Vector3::new(x1,y1,z_mid), lr);
+                tri2!(Vector3::new(x0,y1,z_mid), Vector3::new(x0,y1,z1), Vector3::new(x0,y_mid,z1), Vector3::new(x0,y_mid,z_mid), ll);
+            }
+            // ── StairsEast: step toward +X, climb from the +X side ──────────
+            BlockType::StairsEast => {
+                // Bottom slab
+                tri2!(Vector3::new(x0,y0,z0), Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x0,y0,z1), lbo);
+                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x_mid,y_mid,z0), Vector3::new(x_mid,y_mid,z1), Vector3::new(x0,y_mid,z1), lt); // left half exposed
+                tri2!(Vector3::new(x1,y_mid,z0), Vector3::new(x1,y0,z0), Vector3::new(x0,y0,z0), Vector3::new(x0,y_mid,z0), lf);
+                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x0,y_mid,z1), lb);
+                tri2!(Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y_mid,z0), lr);
+                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x0,y_mid,z1), Vector3::new(x0,y0,z1), Vector3::new(x0,y0,z0), ll);
+                // Top step (left half X, y_mid→y1)
+                tri2!(Vector3::new(x0,y1,z0), Vector3::new(x_mid,y1,z0), Vector3::new(x_mid,y1,z1), Vector3::new(x0,y1,z1), lt);
+                tri2!(Vector3::new(x_mid,y1,z0), Vector3::new(x_mid,y_mid,z0), Vector3::new(x0,y_mid,z0), Vector3::new(x0,y1,z0), lf);
+                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x0,y1,z1), Vector3::new(x_mid,y1,z1), Vector3::new(x_mid,y_mid,z1), lb);
+                tri2!(Vector3::new(x_mid,y_mid,z0), Vector3::new(x_mid,y_mid,z1), Vector3::new(x_mid,y1,z1), Vector3::new(x_mid,y1,z0), lr); // riser
+                tri2!(Vector3::new(x0,y1,z0), Vector3::new(x0,y1,z1), Vector3::new(x0,y0,z1), Vector3::new(x0,y0,z0), ll);
+            }
+            // ── StairsWest: step toward -X, climb from the -X side ──────────
+            BlockType::StairsWest => {
+                // Bottom slab
+                tri2!(Vector3::new(x0,y0,z0), Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x0,y0,z1), lbo);
+                tri2!(Vector3::new(x_mid,y_mid,z0), Vector3::new(x1,y_mid,z0), Vector3::new(x1,y_mid,z1), Vector3::new(x_mid,y_mid,z1), lt); // right half exposed
+                tri2!(Vector3::new(x1,y_mid,z0), Vector3::new(x1,y0,z0), Vector3::new(x0,y0,z0), Vector3::new(x0,y_mid,z0), lf);
+                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x0,y_mid,z1), lb);
+                tri2!(Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y_mid,z0), lr);
+                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x0,y_mid,z1), Vector3::new(x0,y0,z1), Vector3::new(x0,y0,z0), ll);
+                // Top step (right half X, y_mid→y1)
+                tri2!(Vector3::new(x_mid,y1,z0), Vector3::new(x1,y1,z0), Vector3::new(x1,y1,z1), Vector3::new(x_mid,y1,z1), lt);
+                tri2!(Vector3::new(x1,y1,z0), Vector3::new(x1,y_mid,z0), Vector3::new(x_mid,y_mid,z0), Vector3::new(x_mid,y1,z0), lf);
+                tri2!(Vector3::new(x_mid,y_mid,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y1,z1), Vector3::new(x_mid,y1,z1), lb);
+                tri2!(Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x1,y1,z1), Vector3::new(x1,y1,z0), lr);
+                tri2!(Vector3::new(x_mid,y1,z0), Vector3::new(x_mid,y1,z1), Vector3::new(x_mid,y_mid,z1), Vector3::new(x_mid,y_mid,z0), ll); // riser
+            }
+            _ => {} // unreachable, but needed for exhaustive match
+        }
+    }
+
+    /// Emit a bottom slab (y0 → y0+0.5) as raw float-position Triangles.
+    /// The slab sits on the bottom half of the block space — 5 visible faces
+    /// (floor, top, front, back, left, right).
+    fn emit_slab_triangles(
+        wx: isize, wy: isize, wz: isize,
+        _light: u8, tid: u8,
+        out: &mut Vec<Triangle>,
+    ) {
+        let x0 = wx as f32; let x1 = x0 + 1.0;
+        let y0 = wy as f32; let y1 = y0 + 0.5;
+        let z0 = wz as f32; let z1 = z0 + 1.0;
+
+        let lt  = 15u8; // top
+        let lbo =  6u8; // bottom
+        let lf  = 13u8; // front
+        let lb  = 10u8; // back
+        let lr  = 11u8; // right
+        let ll  = 10u8; // left
+
+        macro_rules! tri2 {
+            ($a:expr,$b:expr,$c:expr,$d:expr,$l:expr) => {
+                out.push(Triangle { p1:$a, p2:$b, p3:$c, texture_id:tid, light:$l });
+                out.push(Triangle { p1:$c, p2:$d, p3:$a, texture_id:tid, light:$l });
+            };
+        }
+
+        // Bottom face
+        tri2!(Vector3::new(x0,y0,z0), Vector3::new(x1,y0,z0),
+              Vector3::new(x1,y0,z1), Vector3::new(x0,y0,z1), lbo);
+        // Top face (at y0+0.5)
+        tri2!(Vector3::new(x0,y1,z0), Vector3::new(x1,y1,z0),
+              Vector3::new(x1,y1,z1), Vector3::new(x0,y1,z1), lt);
+        // Front face (z0 side)
+        tri2!(Vector3::new(x1,y1,z0), Vector3::new(x1,y0,z0),
+              Vector3::new(x0,y0,z0), Vector3::new(x0,y1,z0), lf);
+        // Back face (z1 side)
+        tri2!(Vector3::new(x0,y0,z1), Vector3::new(x1,y0,z1),
+              Vector3::new(x1,y1,z1), Vector3::new(x0,y1,z1), lb);
+        // Right face (x1 side)
+        tri2!(Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1),
+              Vector3::new(x1,y1,z1), Vector3::new(x1,y1,z0), lr);
+        // Left face (x0 side)
+        tri2!(Vector3::new(x0,y1,z0), Vector3::new(x0,y1,z1),
+              Vector3::new(x0,y0,z1), Vector3::new(x0,y0,z0), ll);
     }
 }
