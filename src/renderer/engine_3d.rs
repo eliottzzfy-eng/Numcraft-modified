@@ -566,6 +566,11 @@ impl Renderer {
             for quad in quads {
                 self.add_quad_to_render(quad, &mat_view, chunk_blocks_pos);
             }
+
+            // Render non-cubic block geometry (stairs, etc.)
+            for tri in chunk.get_mesh().direct_triangles.iter() {
+                self.add_3d_triangle_to_render(*tri, &mat_view);
+            }
         }
 
         for x in 0..SCREEN_TILE_SUBDIVISION {
