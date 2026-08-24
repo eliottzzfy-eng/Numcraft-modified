@@ -142,7 +142,16 @@ pub enum BlockType {
     Gray = 20,
     Black = 21,
     Tnt = 22,
-    Stairs = 23,
+    // Stairs in 4 orientations — auto-selected on placement based on camera direction.
+    // StairsSouth = step visible face toward +Z (you climb from +Z side)
+    // StairsNorth = step visible face toward -Z
+    // StairsEast  = step visible face toward +X
+    // StairsWest  = step visible face toward -X
+    StairsSouth = 23,
+    StairsNorth = 24,
+    StairsEast  = 25,
+    StairsWest  = 26,
+    Slab = 27,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -177,7 +186,9 @@ pub enum ItemType {
     FlintAndSteel = 23,
     // Not a block: spawns a pig on the targeted block surface
     PigSpawnEgg = 24,
+    // Only one stair item type in inventory; direction chosen auto at placement
     StairsBlock = 25,
+    SlabBlock = 26,
 }
 
 impl ItemType {
@@ -210,8 +221,9 @@ impl ItemType {
             ItemType::TntBlock => 23,
             ItemType::FlintAndSteel => 24,
             ItemType::PigSpawnEgg => 25,
-            // Stairs reuse planks texture (id 10) — same wood color
+            // Stairs and slab reuse planks texture (id 10) — same wood color
             ItemType::StairsBlock => 10,
+            ItemType::SlabBlock => 10,
         }
     }
 
@@ -245,6 +257,7 @@ impl ItemType {
             23 => Some(ItemType::FlintAndSteel),
             24 => Some(ItemType::PigSpawnEgg),
             25 => Some(ItemType::StairsBlock),
+            26 => Some(ItemType::SlabBlock),
             _ => None,
         }
     }
@@ -278,6 +291,7 @@ impl ItemType {
             ItemType::FlintAndSteel => 1,
             ItemType::PigSpawnEgg => 16,
             ItemType::StairsBlock => 64,
+            ItemType::SlabBlock => 64,
         }
     }
 
@@ -309,7 +323,8 @@ impl ItemType {
             ItemType::TntBlock => Some(BlockType::Tnt),
             ItemType::FlintAndSteel => None,
             ItemType::PigSpawnEgg => None,
-            ItemType::StairsBlock => Some(BlockType::Stairs),
+            ItemType::StairsBlock => Some(BlockType::StairsSouth),
+            ItemType::SlabBlock => Some(BlockType::Slab),
         }
     }
 }
@@ -351,8 +366,12 @@ impl BlockType {
             BlockType::Gray => 21,
             BlockType::Black => 22,
             BlockType::Tnt => 23,
-            // Stairs reuse planks texture (id 10)
-            BlockType::Stairs => 10,
+            // All stair variants share the planks texture (id 10)
+            BlockType::StairsSouth
+            | BlockType::StairsNorth
+            | BlockType::StairsEast
+            | BlockType::StairsWest => 10,
+            BlockType::Slab => 10,
         }
     }
 
@@ -382,7 +401,11 @@ impl BlockType {
             20 => Some(BlockType::Gray),
             21 => Some(BlockType::Black),
             22 => Some(BlockType::Tnt),
-            23 => Some(BlockType::Stairs),
+            23 => Some(BlockType::StairsSouth),
+            24 => Some(BlockType::StairsNorth),
+            25 => Some(BlockType::StairsEast),
+            26 => Some(BlockType::StairsWest),
+            27 => Some(BlockType::Slab),
             _ => None,
         }
     }
@@ -414,7 +437,11 @@ impl BlockType {
             BlockType::Gray => 0.8,
             BlockType::Black => 0.8,
             BlockType::Tnt => 0.5,
-            BlockType::Stairs => 1.2,
+            BlockType::StairsSouth
+            | BlockType::StairsNorth
+            | BlockType::StairsEast
+            | BlockType::StairsWest => 1.2,
+            BlockType::Slab => 1.2,
         }
     }
 
@@ -444,7 +471,11 @@ impl BlockType {
             BlockType::Gray => ItemType::GrayBlock,
             BlockType::Black => ItemType::BlackBlock,
             BlockType::Tnt => ItemType::TntBlock,
-            BlockType::Stairs => ItemType::StairsBlock,
+            BlockType::StairsSouth
+            | BlockType::StairsNorth
+            | BlockType::StairsEast
+            | BlockType::StairsWest => ItemType::StairsBlock,
+            BlockType::Slab => ItemType::SlabBlock,
         }
     }
 }
