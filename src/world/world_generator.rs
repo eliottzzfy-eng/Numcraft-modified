@@ -8,7 +8,7 @@ use crate::{
     constants::world::*,
     world::{
         chunk_manager::ChunksManager,
-        structures::{Structure, HOUSE1, TREE1, WELL},
+        structures::{Structure, SMALL_HOUSE, TREE1, WELL},
     },
 };
 
@@ -128,40 +128,45 @@ impl WorldGenerator {
     }
 
     /// Place a small village centered at `center` (one block above ground).
-    /// Layout: puits au centre, 4 maisons aux 4 coins, chemins en planches.
+    /// Layout: puits au centre, 6 petites maisons en cercle autour.
     fn place_village(&self, chunks_manager: &mut ChunksManager, center: Vector3<isize>) {
         // ── Puits au centre ─────────────────────────────────────────────────
-        let well_pos = center + Vector3::new(-1, -1, -1); // centré sur 3 blocs
+        let well_pos = center + Vector3::new(-1, -1, -1);
         self.place_struct(chunks_manager, &WELL, well_pos);
 
-        // ── 4 maisons (7×6 empreinte) aux 4 coins ───────────────────────────
-        // Offset: assez loin du puits (rayon ~10 blocs) pour qu'il y ait de la place
-        let house_offsets: [(isize, isize); 4] = [
-            (-12, -10),  // nord-ouest
-            (  6, -10),  // nord-est
-            (-12,   5),  // sud-ouest
-            (  6,   5),  // sud-est
+        // ── 6 petites maisons (5×5 empreinte) disposées en cercle ───────────
+        // Rayon ~10 blocs autour du puits, 6 positions réparties tous les 60°.
+        // Les maisons font 5 blocs de large : on les centre en soustrayant 2.
+        let house_offsets: [(isize, isize); 6] = [
+            (  0, -10),  // nord
+            (  9,  -5),  // nord-est
+            (  9,   6),  // sud-est
+            (  0,  11),  // sud
+            ( -9,   6),  // sud-ouest
+            ( -9,  -5),  // nord-ouest
         ];
 
         for (dx, dz) in house_offsets {
-            let house_pos = Vector3::new(center.x + dx, center.y - 1, center.z + dz);
-            self.place_struct(chunks_manager, &HOUSE1, house_pos);
+            // Centre la maison 5×5 sur l'offset (soustrait 2 = la moitié de 5)
+            let house_pos = Vector3::new(
+                center.x + dx - 2,
+                center.y - 1,
+                center.z + dz - 2,
+            );
+            self.place_struct(chunks_manager, &SMALL_HOUSE, house_pos);
         }
 
-        // ── Chemins en planches reliant les maisons au puits ────────────────
-        // On trace 4 segments droits : du centre vers chaque maison
-        let path_targets: [(isize, isize, isize, isize); 4] = [
-            (-8, -5, -2, -1),   // vers nord-ouest
-            ( 3, -5,  2, -1),   // vers nord-est
-            (-8,  3, -2,  2),   // vers sud-ouest
-            ( 3,  3,  2,  2),   // vers sud-est
-        ];
-        for (x1, z1, x2, z2) in path_targets {
-            self.place_path(
-                chunks_manager,
-                center + Vector3::new(x1, -1, z1),
-                center + Vector3::new(x2, -1, z2),
+        // ── Chemins en planches du puits vers chaque maison ─────────────────
+        for (dx, dz) in house_offsets {
+            // Point de départ : bord du puits (~2 blocs du centre)
+            let path_from = center + Vector3::new(
+                if dx > 0 { 2 } else if dx < 0 { -2 } else { 0 },
+                -1,
+                if dz > 0 { 2 } else if dz < 0 { -2 } else { 0 },
             );
+            // Point d'arrivée : devant la porte de la maison (centre de la face z=0)
+            let path_to = center + Vector3::new(dx, -1, dz);
+            self.place_path(chunks_manager, path_from, path_to);
         }
     }
 
