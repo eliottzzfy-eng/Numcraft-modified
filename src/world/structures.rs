@@ -33,3 +33,5 @@ pub const TREE1: Structure = Structure::new(include_bytes!("../../target/structs
 pub const HOUSE1: Structure = Structure::new(include_bytes!("../../target/structs/house1.bin"));
 pub const WELL: Structure = Structure::new(include_bytes!("../../target/structs/well.bin"));
 pub const SMALL_HOUSE: Structure = Structure::new(include_bytes!("../../target/structs/small_house.bin"));
+pub const TINY_HOUSE: Structure = Structure::new(include_bytes!("../../target/structs/tiny_house.bin"));
+pub const TINY_WELL: Structure = Structure::new(include_bytes!("../../target/structs/tiny_well.bin"));
