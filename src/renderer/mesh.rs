@@ -539,6 +539,14 @@ impl Mesh {
     ///   StairsNorth → step face toward -Z (climb from -Z side)
     ///   StairsEast  → step face toward +X (climb from +X side)
     ///   StairsWest  → step face toward -X (climb from -X side)
+    /// Emit stair geometry with correct winding order (outward normals via cross product).
+    /// Winding convention derived from existing Quad::get_triangles():
+    ///   top(+Y):    p=(x0,y,z1)→(x1,y,z1)→(x1,y,z0)  and  (x1,y,z0)→(x0,y,z0)→(x0,y,z1)
+    ///   bottom(-Y): p=(x1,y,z0)→(x1,y,z1)→(x0,y,z1)  and  (x0,y,z1)→(x0,y,z0)→(x1,y,z0)
+    ///   front(-Z):  p=(x1,y1,z)→(x1,y0,z)→(x0,y0,z)  and  (x0,y0,z)→(x0,y1,z)→(x1,y1,z)
+    ///   back(+Z):   p=(x0,y0,z)→(x1,y0,z)→(x1,y1,z)  and  (x1,y1,z)→(x0,y1,z)→(x0,y0,z)
+    ///   left(x0,+X):p=(x0,y1,z1)→(x0,y1,z0)→(x0,y0,z0) and (x0,y0,z0)→(x0,y0,z1)→(x0,y1,z1)
+    ///   right(x1,-X):p=(x1,y0,z0)→(x1,y1,z0)→(x1,y1,z1) and (x1,y1,z1)→(x1,y0,z1)→(x1,y0,z0)
     fn emit_stair_triangles(
         wx: isize, wy: isize, wz: isize,
         variant: BlockType,
@@ -553,79 +561,105 @@ impl Mesh {
         let lf = 13u8; let lb = 10u8; let lt = 15u8;
         let lbo = 6u8; let lr = 11u8; let ll = 10u8;
 
-        macro_rules! tri2 {
-            ($a:expr, $b:expr, $c:expr, $d:expr, $l:expr) => {
-                out.push(Triangle { p1: $a, p2: $b, p3: $c, texture_id: tid, light: $l });
-                out.push(Triangle { p1: $c, p2: $d, p3: $a, texture_id: tid, light: $l });
-            };
+        #[inline(always)]
+        fn tri(out: &mut Vec<Triangle>, a: [f32;3], b: [f32;3], c: [f32;3], tid: u8, l: u8) {
+            out.push(Triangle {
+                p1: nalgebra::Vector3::new(a[0],a[1],a[2]),
+                p2: nalgebra::Vector3::new(b[0],b[1],b[2]),
+                p3: nalgebra::Vector3::new(c[0],c[1],c[2]),
+                texture_id: tid, light: l,
+            });
         }
+        // top face (+Y normal)
+        macro_rules! top { ($x0:expr,$z0:expr,$x1:expr,$z1:expr,$y:expr,$l:expr) => {{
+            tri(out,[$x0,$y,$z1],[$x1,$y,$z1],[$x1,$y,$z0],tid,$l);
+            tri(out,[$x1,$y,$z0],[$x0,$y,$z0],[$x0,$y,$z1],tid,$l);
+        }}}
+        // bottom face (-Y normal)
+        macro_rules! bot { ($x0:expr,$z0:expr,$x1:expr,$z1:expr,$y:expr,$l:expr) => {{
+            tri(out,[$x1,$y,$z0],[$x1,$y,$z1],[$x0,$y,$z1],tid,$l);
+            tri(out,[$x0,$y,$z1],[$x0,$y,$z0],[$x1,$y,$z0],tid,$l);
+        }}}
+        // front face (-Z normal, at z=ZV)
+        macro_rules! front { ($x0:expr,$y0:expr,$x1:expr,$y1:expr,$z:expr,$l:expr) => {{
+            tri(out,[$x1,$y1,$z],[$x1,$y0,$z],[$x0,$y0,$z],tid,$l);
+            tri(out,[$x0,$y0,$z],[$x0,$y1,$z],[$x1,$y1,$z],tid,$l);
+        }}}
+        // back face (+Z normal, at z=ZV)
+        macro_rules! back { ($x0:expr,$y0:expr,$x1:expr,$y1:expr,$z:expr,$l:expr) => {{
+            tri(out,[$x0,$y0,$z],[$x1,$y0,$z],[$x1,$y1,$z],tid,$l);
+            tri(out,[$x1,$y1,$z],[$x0,$y1,$z],[$x0,$y0,$z],tid,$l);
+        }}}
+        // left face (+X outward, at x=XV)
+        macro_rules! lface { ($z0:expr,$y0:expr,$z1:expr,$y1:expr,$x:expr,$l:expr) => {{
+            tri(out,[$x,$y1,$z1],[$x,$y1,$z0],[$x,$y0,$z0],tid,$l);
+            tri(out,[$x,$y0,$z0],[$x,$y0,$z1],[$x,$y1,$z1],tid,$l);
+        }}}
+        // right face (-X outward, at x=XV)
+        macro_rules! rface { ($z0:expr,$y0:expr,$z1:expr,$y1:expr,$x:expr,$l:expr) => {{
+            tri(out,[$x,$y0,$z0],[$x,$y1,$z0],[$x,$y1,$z1],tid,$l);
+            tri(out,[$x,$y1,$z1],[$x,$y0,$z1],[$x,$y0,$z0],tid,$l);
+        }}}
 
         match variant {
-            // ── StairsSouth: step toward +Z, climb from the +Z side ──────────
             BlockType::StairsSouth => {
-                // Bottom slab (full XZ, y0→y_mid)
-                tri2!(Vector3::new(x0,y0,z0), Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x0,y0,z1), lbo); // floor
-                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x1,y_mid,z0), Vector3::new(x1,y_mid,z_mid), Vector3::new(x0,y_mid,z_mid), lt); // top exposed (front half)
-                tri2!(Vector3::new(x1,y_mid,z0), Vector3::new(x1,y0,z0), Vector3::new(x0,y0,z0), Vector3::new(x0,y_mid,z0), lf); // front face
-                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x0,y_mid,z1), lb); // back face
-                tri2!(Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y_mid,z0), lr); // right
-                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x0,y_mid,z1), Vector3::new(x0,y0,z1), Vector3::new(x0,y0,z0), ll); // left
-                // Top step (front half XZ, y_mid→y1)
-                tri2!(Vector3::new(x0,y1,z0), Vector3::new(x1,y1,z0), Vector3::new(x1,y1,z_mid), Vector3::new(x0,y1,z_mid), lt); // top
-                tri2!(Vector3::new(x1,y1,z0), Vector3::new(x1,y_mid,z0), Vector3::new(x0,y_mid,z0), Vector3::new(x0,y1,z0), lf); // front
-                tri2!(Vector3::new(x0,y_mid,z_mid), Vector3::new(x1,y_mid,z_mid), Vector3::new(x1,y1,z_mid), Vector3::new(x0,y1,z_mid), lb); // riser
-                tri2!(Vector3::new(x1,y_mid,z0), Vector3::new(x1,y_mid,z_mid), Vector3::new(x1,y1,z_mid), Vector3::new(x1,y1,z0), lr); // right
-                tri2!(Vector3::new(x0,y1,z0), Vector3::new(x0,y1,z_mid), Vector3::new(x0,y_mid,z_mid), Vector3::new(x0,y_mid,z0), ll); // left
+                // slab bas (pleine largeur)
+                bot!(x0,z0,x1,z1,y0,lbo);
+                top!(x0,z0,x1,z_mid,y_mid,lt);  // top exposé moitié avant
+                front!(x0,y0,x1,y_mid,z0,lf);
+                back!(x0,y0,x1,y_mid,z1,lb);
+                lface!(z0,y0,z1,y_mid,x0,ll);
+                rface!(z0,y0,z1,y_mid,x1,lr);
+                // marche haute (moitié avant)
+                top!(x0,z0,x1,z_mid,y1,lt);
+                front!(x0,y_mid,x1,y1,z0,lf);
+                back!(x0,y_mid,x1,y1,z_mid,lb);  // contremarche
+                lface!(z0,y_mid,z_mid,y1,x0,ll);
+                rface!(z0,y_mid,z_mid,y1,x1,lr);
             }
-            // ── StairsNorth: step toward -Z, climb from the -Z side ──────────
             BlockType::StairsNorth => {
-                // Bottom slab
-                tri2!(Vector3::new(x0,y0,z0), Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x0,y0,z1), lbo);
-                tri2!(Vector3::new(x0,y_mid,z_mid), Vector3::new(x1,y_mid,z_mid), Vector3::new(x1,y_mid,z1), Vector3::new(x0,y_mid,z1), lt); // top exposed (back half)
-                tri2!(Vector3::new(x1,y_mid,z0), Vector3::new(x1,y0,z0), Vector3::new(x0,y0,z0), Vector3::new(x0,y_mid,z0), lf);
-                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x0,y_mid,z1), lb);
-                tri2!(Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y_mid,z0), lr);
-                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x0,y_mid,z1), Vector3::new(x0,y0,z1), Vector3::new(x0,y0,z0), ll);
-                // Top step (back half XZ, y_mid→y1)
-                tri2!(Vector3::new(x0,y1,z_mid), Vector3::new(x1,y1,z_mid), Vector3::new(x1,y1,z1), Vector3::new(x0,y1,z1), lt); // top
-                tri2!(Vector3::new(x0,y_mid,z_mid), Vector3::new(x1,y_mid,z_mid), Vector3::new(x1,y1,z_mid), Vector3::new(x0,y1,z_mid), lf); // riser (front of step)
-                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x1,y0,z1), Vector3::new(x1,y1,z1), Vector3::new(x0,y1,z1), lb); // back
-                tri2!(Vector3::new(x1,y_mid,z_mid), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y1,z1), Vector3::new(x1,y1,z_mid), lr);
-                tri2!(Vector3::new(x0,y1,z_mid), Vector3::new(x0,y1,z1), Vector3::new(x0,y_mid,z1), Vector3::new(x0,y_mid,z_mid), ll);
+                bot!(x0,z0,x1,z1,y0,lbo);
+                top!(x0,z_mid,x1,z1,y_mid,lt);  // top exposé moitié arrière
+                front!(x0,y0,x1,y_mid,z0,lf);
+                back!(x0,y0,x1,y_mid,z1,lb);
+                lface!(z0,y0,z1,y_mid,x0,ll);
+                rface!(z0,y0,z1,y_mid,x1,lr);
+                // marche haute (moitié arrière)
+                top!(x0,z_mid,x1,z1,y1,lt);
+                front!(x0,y_mid,x1,y1,z_mid,lf); // contremarche
+                back!(x0,y_mid,x1,y1,z1,lb);
+                lface!(z_mid,y_mid,z1,y1,x0,ll);
+                rface!(z_mid,y_mid,z1,y1,x1,lr);
             }
-            // ── StairsEast: step toward +X, climb from the +X side ──────────
             BlockType::StairsEast => {
-                // Bottom slab
-                tri2!(Vector3::new(x0,y0,z0), Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x0,y0,z1), lbo);
-                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x_mid,y_mid,z0), Vector3::new(x_mid,y_mid,z1), Vector3::new(x0,y_mid,z1), lt); // left half exposed
-                tri2!(Vector3::new(x1,y_mid,z0), Vector3::new(x1,y0,z0), Vector3::new(x0,y0,z0), Vector3::new(x0,y_mid,z0), lf);
-                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x0,y_mid,z1), lb);
-                tri2!(Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y_mid,z0), lr);
-                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x0,y_mid,z1), Vector3::new(x0,y0,z1), Vector3::new(x0,y0,z0), ll);
-                // Top step (left half X, y_mid→y1)
-                tri2!(Vector3::new(x0,y1,z0), Vector3::new(x_mid,y1,z0), Vector3::new(x_mid,y1,z1), Vector3::new(x0,y1,z1), lt);
-                tri2!(Vector3::new(x_mid,y1,z0), Vector3::new(x_mid,y_mid,z0), Vector3::new(x0,y_mid,z0), Vector3::new(x0,y1,z0), lf);
-                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x0,y1,z1), Vector3::new(x_mid,y1,z1), Vector3::new(x_mid,y_mid,z1), lb);
-                tri2!(Vector3::new(x_mid,y_mid,z0), Vector3::new(x_mid,y_mid,z1), Vector3::new(x_mid,y1,z1), Vector3::new(x_mid,y1,z0), lr); // riser
-                tri2!(Vector3::new(x0,y1,z0), Vector3::new(x0,y1,z1), Vector3::new(x0,y0,z1), Vector3::new(x0,y0,z0), ll);
+                bot!(x0,z0,x1,z1,y0,lbo);
+                top!(x0,z0,x_mid,z1,y_mid,lt);  // top exposé moitié gauche
+                front!(x0,y0,x1,y_mid,z0,lf);
+                back!(x0,y0,x1,y_mid,z1,lb);
+                lface!(z0,y0,z1,y_mid,x0,ll);
+                rface!(z0,y0,z1,y_mid,x1,lr);
+                // marche haute (moitié gauche)
+                top!(x0,z0,x_mid,z1,y1,lt);
+                front!(x0,y_mid,x_mid,y1,z0,lf);
+                back!(x0,y_mid,x_mid,y1,z1,lb);
+                lface!(z0,y_mid,z1,y1,x0,ll);
+                rface!(z0,y_mid,z1,y1,x_mid,lr); // contremarche
             }
-            // ── StairsWest: step toward -X, climb from the -X side ──────────
             BlockType::StairsWest => {
-                // Bottom slab
-                tri2!(Vector3::new(x0,y0,z0), Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x0,y0,z1), lbo);
-                tri2!(Vector3::new(x_mid,y_mid,z0), Vector3::new(x1,y_mid,z0), Vector3::new(x1,y_mid,z1), Vector3::new(x_mid,y_mid,z1), lt); // right half exposed
-                tri2!(Vector3::new(x1,y_mid,z0), Vector3::new(x1,y0,z0), Vector3::new(x0,y0,z0), Vector3::new(x0,y_mid,z0), lf);
-                tri2!(Vector3::new(x0,y0,z1), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x0,y_mid,z1), lb);
-                tri2!(Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y_mid,z0), lr);
-                tri2!(Vector3::new(x0,y_mid,z0), Vector3::new(x0,y_mid,z1), Vector3::new(x0,y0,z1), Vector3::new(x0,y0,z0), ll);
-                // Top step (right half X, y_mid→y1)
-                tri2!(Vector3::new(x_mid,y1,z0), Vector3::new(x1,y1,z0), Vector3::new(x1,y1,z1), Vector3::new(x_mid,y1,z1), lt);
-                tri2!(Vector3::new(x1,y1,z0), Vector3::new(x1,y_mid,z0), Vector3::new(x_mid,y_mid,z0), Vector3::new(x_mid,y1,z0), lf);
-                tri2!(Vector3::new(x_mid,y_mid,z1), Vector3::new(x1,y_mid,z1), Vector3::new(x1,y1,z1), Vector3::new(x_mid,y1,z1), lb);
-                tri2!(Vector3::new(x1,y0,z0), Vector3::new(x1,y0,z1), Vector3::new(x1,y1,z1), Vector3::new(x1,y1,z0), lr);
-                tri2!(Vector3::new(x_mid,y1,z0), Vector3::new(x_mid,y1,z1), Vector3::new(x_mid,y_mid,z1), Vector3::new(x_mid,y_mid,z0), ll); // riser
+                bot!(x0,z0,x1,z1,y0,lbo);
+                top!(x_mid,z0,x1,z1,y_mid,lt);  // top exposé moitié droite
+                front!(x0,y0,x1,y_mid,z0,lf);
+                back!(x0,y0,x1,y_mid,z1,lb);
+                lface!(z0,y0,z1,y_mid,x0,ll);
+                rface!(z0,y0,z1,y_mid,x1,lr);
+                // marche haute (moitié droite)
+                top!(x_mid,z0,x1,z1,y1,lt);
+                front!(x_mid,y_mid,x1,y1,z0,lf);
+                back!(x_mid,y_mid,x1,y1,z1,lb);
+                lface!(z0,y_mid,z1,y1,x_mid,ll); // contremarche
+                rface!(z0,y_mid,z1,y1,x1,lr);
             }
-            _ => {} // unreachable, but needed for exhaustive match
+            _ => {}
         }
     }
 
