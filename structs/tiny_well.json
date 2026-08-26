@@ -1,0 +1,24 @@
+{
+    "name": "tiny_well",
+    "size": [
+        3,
+        2,
+        3
+    ],
+    "palette": {
+        "x": 0,
+        "c": 5
+    },
+    "data": [
+        [
+            "ccc",
+            "ccc",
+            "ccc"
+        ],
+        [
+            "ccc",
+            "cxc",
+            "ccc"
+        ]
+    ]
+}

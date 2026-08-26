@@ -1,0 +1,30 @@
+{
+    "name": "tiny_house",
+    "size": [
+        3,
+        3,
+        3
+    ],
+    "palette": {
+        "x": 0,
+        "p": 9,
+        "c": 5
+    },
+    "data": [
+        [
+            "ppp",
+            "ppp",
+            "ppp"
+        ],
+        [
+            "pxp",
+            "pxp",
+            "ppp"
+        ],
+        [
+            "ccc",
+            "ccc",
+            "ccc"
+        ]
+    ]
+}
