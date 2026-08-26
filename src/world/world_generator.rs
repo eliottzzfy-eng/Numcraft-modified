@@ -8,7 +8,7 @@ use crate::{
     constants::world::*,
     world::{
         chunk_manager::ChunksManager,
-        structures::{Structure, SMALL_HOUSE, TREE1, WELL},
+        structures::{Structure, TINY_HOUSE, TINY_WELL, TREE1},
     },
 };
 
@@ -127,78 +127,21 @@ impl WorldGenerator {
         }
     }
 
-    /// Place a small village centered at `center` (one block above ground).
-    /// Layout: puits au centre, 6 petites maisons en cercle autour.
+    /// Place a minimal village in the spawn chunk.
+    /// Only 2 houses + 1 well, all within a ~10 block radius to stay inside the
+    /// spawn chunk and avoid allocating extra chunks that cause OOM.
     fn place_village(&self, chunks_manager: &mut ChunksManager, center: Vector3<isize>) {
-        // ── Puits au centre ─────────────────────────────────────────────────
+        // Puits centré (3×2, centré sur -1)
         let well_pos = center + Vector3::new(-1, -1, -1);
-        self.place_struct(chunks_manager, &WELL, well_pos);
+        self.place_struct(chunks_manager, &TINY_WELL, well_pos);
 
-        // ── 6 petites maisons (5×5 empreinte) disposées en cercle ───────────
-        // Rayon ~10 blocs autour du puits, 6 positions réparties tous les 60°.
-        // Les maisons font 5 blocs de large : on les centre en soustrayant 2.
-        let house_offsets: [(isize, isize); 6] = [
-            (  0, -10),  // nord
-            (  9,  -5),  // nord-est
-            (  9,   6),  // sud-est
-            (  0,  11),  // sud
-            ( -9,   6),  // sud-ouest
-            ( -9,  -5),  // nord-ouest
-        ];
+        // Maison 1 : au nord (z = -5)
+        let house1_pos = center + Vector3::new(-1, -1, -5);
+        self.place_struct(chunks_manager, &TINY_HOUSE, house1_pos);
 
-        for (dx, dz) in house_offsets {
-            // Centre la maison 5×5 sur l'offset (soustrait 2 = la moitié de 5)
-            let house_pos = Vector3::new(
-                center.x + dx - 2,
-                center.y - 1,
-                center.z + dz - 2,
-            );
-            self.place_struct(chunks_manager, &SMALL_HOUSE, house_pos);
-        }
-
-        // ── Chemins en planches du puits vers chaque maison ─────────────────
-        for (dx, dz) in house_offsets {
-            // Point de départ : bord du puits (~2 blocs du centre)
-            let path_from = center + Vector3::new(
-                if dx > 0 { 2 } else if dx < 0 { -2 } else { 0 },
-                -1,
-                if dz > 0 { 2 } else if dz < 0 { -2 } else { 0 },
-            );
-            // Point d'arrivée : devant la porte de la maison (centre de la face z=0)
-            let path_to = center + Vector3::new(dx, -1, dz);
-            self.place_path(chunks_manager, path_from, path_to);
-        }
-    }
-
-    /// Draw a straight plank path between two world positions (same Y).
-    fn place_path(
-        &self,
-        chunks_manager: &mut ChunksManager,
-        from: Vector3<isize>,
-        to: Vector3<isize>,
-    ) {
-        let dx = (to.x - from.x).signum();
-        let dz = (to.z - from.z).signum();
-        let mut pos = from;
-        let y = from.y;
-
-        loop {
-            // Place planks on the surface (replace only grass/air/dirt on top)
-            let surface = Vector3::new(pos.x, y, pos.z);
-            chunks_manager.set_block_in_world(surface, crate::constants::BlockType::Planks);
-
-            if pos.x == to.x && pos.z == to.z {
-                break;
-            }
-            // Bresenham-ish: advance on the longer axis first
-            let rem_x = (to.x - pos.x).abs();
-            let rem_z = (to.z - pos.z).abs();
-            if rem_x >= rem_z {
-                pos.x += dx;
-            } else {
-                pos.z += dz;
-            }
-        }
+        // Maison 2 : au sud (z = +3)
+        let house2_pos = center + Vector3::new(-1, -1, 3);
+        self.place_struct(chunks_manager, &TINY_HOUSE, house2_pos);
     }
 
     /// Place a structure only if there is enough space
