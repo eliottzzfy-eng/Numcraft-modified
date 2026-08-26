@@ -105,6 +105,10 @@ impl EntityType {
                 offset: Vector3::new(-0.45, -0.45, -0.45),
                 size: Vector3::new(0.9, 0.9, 0.9),
             }),
+            EntityType::Minecart => Some(BoundingBox {
+                offset: Vector3::new(-0.45, -0.3, -0.45),
+                size: Vector3::new(0.9, 0.6, 0.9),
+            }),
         }
     }
 }
@@ -114,6 +118,7 @@ pub enum EntityType {
     Player = 0,
     Item = 1,
     Pig = 2,
+    Minecart = 3,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -152,6 +157,7 @@ pub enum BlockType {
     StairsEast  = 25,
     StairsWest  = 26,
     Slab = 27,
+    Rail = 28,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -189,6 +195,8 @@ pub enum ItemType {
     // Only one stair item type in inventory; direction chosen auto at placement
     StairsBlock = 25,
     SlabBlock = 26,
+    RailItem = 27,
+    MinecartItem = 28,
 }
 
 impl ItemType {
@@ -221,9 +229,11 @@ impl ItemType {
             ItemType::TntBlock => 23,
             ItemType::FlintAndSteel => 24,
             ItemType::PigSpawnEgg => 25,
-            // Stairs and slab reuse planks texture (id 10) — same wood color
-            ItemType::StairsBlock => 10,
-            ItemType::SlabBlock => 10,
+            // Stairs and slab get dedicated isometric icons in the tileset
+            ItemType::StairsBlock => 29,
+            ItemType::SlabBlock => 30,
+            ItemType::RailItem    => 27,  // rail icon (tile 27)
+            ItemType::MinecartItem => 28, // minecart icon (tile 28)
         }
     }
 
@@ -258,6 +268,8 @@ impl ItemType {
             24 => Some(ItemType::PigSpawnEgg),
             25 => Some(ItemType::StairsBlock),
             26 => Some(ItemType::SlabBlock),
+            27 => Some(ItemType::RailItem),
+            28 => Some(ItemType::MinecartItem),
             _ => None,
         }
     }
@@ -292,6 +304,8 @@ impl ItemType {
             ItemType::PigSpawnEgg => 16,
             ItemType::StairsBlock => 64,
             ItemType::SlabBlock => 64,
+            ItemType::RailItem => 64,
+            ItemType::MinecartItem => 8,
         }
     }
 
@@ -325,6 +339,9 @@ impl ItemType {
             ItemType::PigSpawnEgg => None,
             ItemType::StairsBlock => Some(BlockType::StairsSouth),
             ItemType::SlabBlock => Some(BlockType::Slab),
+            ItemType::RailItem => Some(BlockType::Rail),
+            // Minecart is not a block — placed as entity in player.rs
+            ItemType::MinecartItem => None,
         }
     }
 }
@@ -372,6 +389,7 @@ impl BlockType {
             | BlockType::StairsEast
             | BlockType::StairsWest => 10,
             BlockType::Slab => 10,
+            BlockType::Rail => 27,
         }
     }
 
@@ -406,6 +424,7 @@ impl BlockType {
             25 => Some(BlockType::StairsEast),
             26 => Some(BlockType::StairsWest),
             27 => Some(BlockType::Slab),
+            28 => Some(BlockType::Rail),
             _ => None,
         }
     }
